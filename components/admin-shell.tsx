@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   BarChart3,
-  Bell,
   BookOpen,
   CalendarDays,
   ChevronDown,
@@ -9,7 +8,7 @@ import {
   FolderOpen,
   Gauge,
   Handshake,
-  Images,
+  Image as ImageIcon,
   LayoutDashboard,
   Mail,
   Megaphone,
@@ -21,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { AdminGlobalSearch } from "./admin-global-search";
+import { AdminNotifications } from "./admin-notifications";
 import { MoonyLogo } from "./moony-logo";
 
 const groups = [
@@ -30,7 +30,7 @@ const groups = [
       ["Dashboard", "/admin", LayoutDashboard],
       ["Site & Design", "/admin/site-design", Palette],
       ["Pages", "/admin/pages", FileText],
-      ["Médias", "/admin/medias", Images],
+      ["Médias", "/admin/medias", ImageIcon],
       ["Ressources", "/admin/ressources", FolderOpen],
       ["Articles", "/admin/articles", BookOpen],
     ],
@@ -104,7 +104,7 @@ export function AdminShell({ active, children }: { active: string; children: Rea
             <div className="absolute -bottom-12 left-3 h-28 w-28 rounded-full border border-[#b97955]/14" />
             <p className="moony-serif relative text-[18px] leading-[1.15] text-[#8a4a31]">Un monde où<br />chaque femme<br />peut s’épanouir</p>
             <span className="relative mt-3 block h-px w-8 bg-[#a95832]/65" />
-            <p className="relative mt-5 text-[9px] leading-4 text-[#5b2f22]/42">MOONY<br />Web Studio<br />v1.0.0</p>
+            <p className="relative mt-5 text-[9px] leading-4 text-[#5b2f22]/42">MOONY<br />Web Studio<br />Control Center</p>
           </div>
         </aside>
 
@@ -113,13 +113,10 @@ export function AdminShell({ active, children }: { active: string; children: Rea
             <div className="moony-serif hidden shrink-0 text-[23px] text-[#5b2f22] xl:block">Control Center</div>
             <AdminGlobalSearch />
             <div className="ml-4 flex items-center gap-4">
-              <button className="relative rounded-full p-2 transition hover:bg-[#f5e8df]" aria-label="Notifications">
-                <Bell size={18} />
-                <span className="absolute right-0 top-0 grid h-4 w-4 place-items-center rounded-full bg-[#9d4c27] text-[8px] font-bold text-white">3</span>
-              </button>
+              <AdminNotifications />
               <div className="hidden items-center gap-2 border-l border-[#5b2f22]/10 pl-4 sm:flex">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(145deg,#d8a17e,#a95631)] text-[10px] font-semibold text-white">AK</div>
-                <div className="text-[11px] leading-[1.25]"><strong className="block font-semibold">Aïssata Koné</strong><span className="text-[#5b2f22]/45">Administratrice</span></div>
+                <div className="grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(145deg,#d8a17e,#a95631)] text-[10px] font-semibold text-white">MA</div>
+                <div className="text-[11px] leading-[1.25]"><strong className="block font-semibold">MOONY Admin</strong><span className="text-[#5b2f22]/45">Control Center</span></div>
                 <ChevronDown size={13} />
               </div>
             </div>
