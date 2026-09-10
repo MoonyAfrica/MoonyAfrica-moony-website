@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
 
 const allowedStatuses = new Set(["draft", "published", "archived"]);
+const pageFields = "id,title,slug,status,seo_title,seo_description,hero,sections,metadata,created_at,updated_at";
+type VersionAction = "create" | "save" | "publish" | "unpublish" | "archive" | "restore";
+type AdminSupabase = NonNullable<ReturnType<typeof requireAdmin>["supabase"]>;
 
 function cleanSlug(value: unknown) {
   const raw = asText(value, 220) || "/";
@@ -17,20 +20,40 @@ async function jsonBody(request: Request) {
   }
 }
 
+function actionFor(previousStatus: string | undefined, nextStatus: string | undefined): VersionAction {
+  if (nextStatus === "published" && previousStatus !== "published") return "publish";
+  if (previousStatus === "published" && nextStatus === "draft") return "unpublish";
+  if (nextStatus === "archived" && previousStatus !== "archived") return "archive";
+  return "save";
+}
+
+async function saveVersion(supabase: AdminSupabase, pageId: string, snapshot: Record<string, unknown>, action: VersionAction, note?: string) {
+  try {
+    await supabase.from("website_page_versions").insert({
+      page_id: pageId,
+      action,
+      created_by: "MOONY Admin",
+      note: note || null,
+      snapshot,
+    });
+  } catch {
+    // Best effort until the page-version migration is applied in Supabase.
+  }
+}
+
 export async function GET(request: Request) {
   const { error, supabase } = requireAdmin(request);
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id")?.trim() || "";
-  const fields = "id,title,slug,status,seo_title,seo_description,hero,sections,metadata,created_at,updated_at";
 
   if (id) {
-    const { data, error: queryError } = await supabase.from("website_pages").select(fields).eq("id", id).maybeSingle();
+    const { data, error: queryError } = await supabase.from("website_pages").select(pageFields).eq("id", id).maybeSingle();
     if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: "Page introuvable." }, { status: 404 });
     return NextResponse.json({ page: data });
   }
 
-  const { data, error: queryError } = await supabase.from("website_pages").select(fields).order("updated_at", { ascending: false });
+  const { data, error: queryError } = await supabase.from("website_pages").select(pageFields).order("updated_at", { ascending: false });
   if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
   return NextResponse.json({ pages: data ?? [] });
 }
@@ -59,10 +82,11 @@ export async function POST(request: Request) {
       metadata: typeof body.metadata === "object" && body.metadata ? body.metadata : {},
       updated_at: new Date().toISOString(),
     })
-    .select("*")
+    .select(pageFields)
     .single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+  await saveVersion(supabase, data.id, data as Record<string, unknown>, "create", "Création initiale de la page.");
   return NextResponse.json({ page: data }, { status: 201 });
 }
 
@@ -75,6 +99,10 @@ export async function PATCH(request: Request) {
   const id = asText(body.id, 80);
   if (!id) return NextResponse.json({ error: "Page introuvable." }, { status: 422 });
 
+  const { data: current, error: currentError } = await supabase.from("website_pages").select(pageFields).eq("id", id).maybeSingle();
+  if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 });
+  if (!current) return NextResponse.json({ error: "Page introuvable." }, { status: 404 });
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof body.title === "string") patch.title = asText(body.title, 180);
   if (typeof body.slug === "string") patch.slug = cleanSlug(body.slug);
@@ -85,7 +113,10 @@ export async function PATCH(request: Request) {
   if (Array.isArray(body.sections)) patch.sections = body.sections;
   if (typeof body.metadata === "object" && body.metadata) patch.metadata = body.metadata;
 
-  const { data, error: updateError } = await supabase.from("website_pages").update(patch).eq("id", id).select("*").single();
+  const nextStatus = typeof patch.status === "string" ? patch.status : current.status;
+  await saveVersion(supabase, id, current as Record<string, unknown>, actionFor(current.status, nextStatus));
+
+  const { data, error: updateError } = await supabase.from("website_pages").update(patch).eq("id", id).select(pageFields).single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   return NextResponse.json({ page: data });
 }
