@@ -1,8 +1,21 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
 import { getResourceBySlug } from "@/lib/public-content";
+import { getPublicSiteSettings } from "@/lib/public-settings";
+
+export async function generateMetadata({params}:{params:Promise<{slug:string}>}):Promise<Metadata>{
+  const {slug}=await params;
+  const [resource,settings]=await Promise.all([getResourceBySlug(slug),getPublicSiteSettings()]);
+  if(!resource)return{title:"Ressource | MOONY Africa",robots:{index:false,follow:false}};
+  const title=`${resource.title} | MOONY Africa`;
+  const description=resource.excerpt||settings.seo.defaultDescription;
+  const image=resource.image_url||settings.seo.defaultOgImage||undefined;
+  const path=`/ressources/${resource.slug}`;
+  return{title,description,alternates:{canonical:path},openGraph:{type:"article",title,description,url:path,images:image?[image]:undefined},twitter:{card:image?"summary_large_image":"summary",title,description,images:image?[image]:undefined}};
+}
 
 export default async function ResourceDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params; const resource = await getResourceBySlug(slug); if (!resource) notFound();
