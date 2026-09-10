@@ -1,8 +1,9 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import type { CmsSection } from "@/lib/cms-types";
 
-type HeroContent={eyebrow?:string;title?:string;body?:string;primaryLabel?:string;primaryHref?:string;secondaryLabel?:string;secondaryHref?:string};
+type HeroContent={eyebrow?:string;title?:string;body?:string;primaryLabel?:string;primaryHref?:string;secondaryLabel?:string;secondaryHref?:string;imageUrl?:string;imageAlt?:string;imagePosition?:string};
 type PreviewPage={title:string;slug:string;status:"draft"|"published"|"archived";hero:HeroContent;sections:CmsSection[]};
 
 const tones:Record<NonNullable<CmsSection["background"]>,string>={
@@ -11,6 +12,7 @@ const tones:Record<NonNullable<CmsSection["background"]>,string>={
   terracotta:"bg-[#b9693d] text-white",
   brown:"bg-[#4b271d] text-white",
 };
+function safeBackgroundUrl(value:string){return value.replace(/["'\n\r()]/g,"");}
 
 function Heading({section}:{section:CmsSection}){
   return <>{section.eyebrow?<p className="text-[7px] font-semibold uppercase tracking-[.24em] opacity-60">{section.eyebrow}</p>:null}{section.title?<h3 className="moony-serif mt-1.5 whitespace-pre-line text-[22px] leading-[1.02]">{section.title}</h3>:null}</>;
@@ -34,12 +36,18 @@ function SectionPreview({section}:{section:CmsSection}){
 
 export function AdminPagePreview({page}:{page:PreviewPage}){
   const visible=(page.sections??[]).filter(section=>!section.hidden);
+  const hasImage=Boolean(page.hero.imageUrl);
+  const heroStyle:CSSProperties|undefined=hasImage?{
+    backgroundImage:`linear-gradient(90deg, rgba(255,248,240,.98) 0%, rgba(255,248,240,.90) 38%, rgba(255,248,240,.30) 70%), url("${safeBackgroundUrl(page.hero.imageUrl||"")}")`,
+    backgroundSize:"cover",
+    backgroundPosition:`center, ${page.hero.imagePosition||"65% center"}`,
+  }:undefined;
   return <div className="overflow-hidden rounded-[18px] border border-[#5b2f22]/10 bg-white shadow-[0_16px_45px_rgba(63,30,20,.08)]">
     <div className="flex items-center gap-2 border-b border-[#5b2f22]/8 bg-[#fffdf9] px-4 py-2 text-[8px] text-[#5b2f22]/50"><span className="h-2 w-2 rounded-full bg-red-300"/><span className="h-2 w-2 rounded-full bg-amber-300"/><span className="h-2 w-2 rounded-full bg-emerald-300"/><span className="ml-3 flex-1 rounded-md bg-[#f4ebe4] px-3 py-1 text-center">moonyafrica.com{page.slug}</span><span className={`rounded-full px-2 py-1 ${page.status==="published"?"bg-emerald-100 text-emerald-700":"bg-amber-100 text-amber-700"}`}>{page.status==="published"?"Publié":"Aperçu"}</span></div>
     <div className="max-h-[680px] overflow-y-auto">
-      <section className="relative min-h-[330px] overflow-hidden bg-[linear-gradient(120deg,#6b321f_0%,#a65f3b_48%,#dfb08e_100%)] px-8 py-8 text-white">
+      <section style={heroStyle} className={`relative min-h-[330px] overflow-hidden px-8 py-8 ${hasImage?"bg-[#f3e4d6] text-[#5b2f22]":"bg-[linear-gradient(120deg,#6b321f_0%,#a65f3b_48%,#dfb08e_100%)] text-white"}`}>
         <div className="mb-12 flex items-center justify-between text-[8px]"><span className="moony-serif text-lg">MOONY</span><div className="hidden gap-4 sm:flex"><span>Accueil</span><span>Mission</span><span>Services</span><span>Communauté</span></div></div>
-        <div className="max-w-[470px]">{page.hero.eyebrow?<p className="text-[7px] font-semibold uppercase tracking-[.28em] text-white/70">{page.hero.eyebrow}</p>:null}<h2 className="moony-serif mt-2 whitespace-pre-line text-[38px] leading-[.96] tracking-[-.04em]">{page.hero.title||page.title}</h2>{page.hero.body?<p className="mt-4 max-w-[400px] text-[10px] leading-4 text-white/78">{page.hero.body}</p>:null}<div className="mt-5 flex flex-wrap gap-2">{page.hero.primaryLabel?<span className="rounded-full bg-[#7e3518] px-4 py-2 text-[8px]">{page.hero.primaryLabel}</span>:null}{page.hero.secondaryLabel?<span className="rounded-full border border-white/55 px-4 py-2 text-[8px]">{page.hero.secondaryLabel}</span>:null}</div></div>
+        <div className="max-w-[470px]">{page.hero.eyebrow?<p className={`text-[7px] font-semibold uppercase tracking-[.28em] ${hasImage?"text-[#8d3b19]":"text-white/70"}`}>{page.hero.eyebrow}</p>:null}<h2 className="moony-serif mt-2 whitespace-pre-line text-[38px] leading-[.96] tracking-[-.04em]">{page.hero.title||page.title}</h2>{page.hero.body?<p className={`mt-4 max-w-[400px] text-[10px] leading-4 ${hasImage?"text-[#5b2f22]/75":"text-white/78"}`}>{page.hero.body}</p>:null}<div className="mt-5 flex flex-wrap gap-2">{page.hero.primaryLabel?<span className="rounded-full bg-[#7e3518] px-4 py-2 text-[8px] text-white">{page.hero.primaryLabel}</span>:null}{page.hero.secondaryLabel?<span className={`rounded-full border px-4 py-2 text-[8px] ${hasImage?"border-[#5b2f22]/35":"border-white/55"}`}>{page.hero.secondaryLabel}</span>:null}</div></div>
       </section>
       {visible.map(section=><SectionPreview key={section.id} section={section}/>)}
       {!visible.length?<div className="bg-[#fffaf4] px-8 py-10 text-center text-[9px] text-[#5b2f22]/42">Le hero est prêt. Ajoutez des blocs de contenu pour compléter la page.</div>:null}
