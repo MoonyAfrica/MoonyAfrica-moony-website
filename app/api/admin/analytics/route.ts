@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-api";
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
+  const { error, supabase } = requireAdmin(request, "analytics.read"); if (error || !supabase) return error;
   const url = new URL(request.url); const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days")) || 30));
   const since = new Date(Date.now() - days * 86400000).toISOString();
   const [eventsResult, leadsResult, subsResult] = await Promise.all([
