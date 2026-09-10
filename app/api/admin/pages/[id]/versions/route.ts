@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 const pageFields = "id,title,slug,status,seo_title,seo_description,hero,sections,metadata,created_at,updated_at";
 
@@ -19,7 +19,7 @@ function cleanStatus(value: unknown) {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "site.read");
   if (error || !supabase) return error;
   const { id } = await params;
   if (!id) return NextResponse.json({ error: "Page introuvable." }, { status: 422 });
@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "site.write");
   if (error || !supabase) return error;
   const { id } = await params;
 
@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const { error: snapshotError } = await supabase.from("website_page_versions").insert({
     page_id: id,
     action: "restore",
-    created_by: "MOONY Admin",
+    created_by: session?.name || session?.email || "MOONY Admin",
     note: "État sauvegardé automatiquement avant restauration.",
     snapshot: current,
   });
@@ -78,5 +78,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data, error: restoreError } = await supabase.from("website_pages").update(patch).eq("id", id).select(pageFields).single();
   if (restoreError) return NextResponse.json({ error: restoreError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "cms.restore", "website_page", id, `Version restaurée pour « ${data.title} »`, { versionId });
   return NextResponse.json({ page: data });
 }
