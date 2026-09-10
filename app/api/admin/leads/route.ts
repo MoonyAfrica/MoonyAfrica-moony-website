@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import type { AdminSession } from "@/lib/admin-auth";
 
 const statuses = new Set(["new","to_contact","contacted","appointment","proposal","negotiation","won","lost"]);
 const needs = new Set(["demonstration","rappel","professionnel","partenariat","entreprise","presse","carriere","confidentialite","protections","legal","autre"]);
@@ -9,19 +10,19 @@ const stageLabels: Record<string,string> = {
 };
 const json = async (request: Request) => { try { return await request.json() as Record<string, unknown>; } catch { return null; } };
 
-async function logActivity(supabase: ReturnType<typeof requireAdmin>["supabase"], leadId:string, summary:string, body?:string | null) {
+async function logActivity(supabase: ReturnType<typeof requireAdmin>["supabase"], leadId:string, summary:string, body:string | null, session:AdminSession|null) {
   if (!supabase) return;
   await supabase.from("website_crm_activities").insert({
     lead_id: leadId,
     kind: "system",
     summary,
     body: body || null,
-    created_by: "Control Center",
+    created_by: session?.name || session?.email || "Control Center",
   });
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
+  const { error, supabase } = requireAdmin(request, "crm.read"); if (error || !supabase) return error;
   const query = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || "";
   let builder = supabase.from("website_leads").select("*").order("updated_at", { ascending: false }).limit(250);
   if (query) builder = builder.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,company.ilike.%${query}%`);
@@ -31,7 +32,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
+  const { error, supabase, session } = requireAdmin(request, "crm.write"); if (error || !supabase) return error;
   const input = await json(request); if (!input) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
   const firstName = asText(input.firstName,120); const lastName = asText(input.lastName,120); const email = asText(input.email,240).toLowerCase();
   if (!firstName || !lastName || !email.includes("@")) return NextResponse.json({ error: "Prénom, nom et e-mail valide sont obligatoires." }, { status: 422 });
@@ -45,16 +46,17 @@ export async function POST(request: Request) {
     country:asNullableText(input.country,120),city:asNullableText(input.city,120),notes:asNullableText(input.notes,8000),updated_at:new Date().toISOString(),
   }).select("*").single();
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
-  await logActivity(supabase, data.id, "Lead créé", `Source : ${data.source || "Control Center"}`);
+  await logActivity(supabase, data.id, "Lead créé", `Source : ${data.source || "Control Center"}`, session);
+  await writeAuditLog(supabase, session, "crm.lead_created", "lead", data.id, `${firstName} ${lastName} ajouté au CRM`, { status, need, company: data.company ?? null });
   return NextResponse.json({ lead:data }, { status:201 });
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
+  const { error, supabase, session } = requireAdmin(request, "crm.write"); if (error || !supabase) return error;
   const input = await json(request); if (!input) return NextResponse.json({ error:"Requête invalide." },{status:400});
   const id=asText(input.id,80); if(!id) return NextResponse.json({error:"Lead introuvable."},{status:422});
 
-  const { data: before } = await supabase.from("website_leads").select("status,assigned_to,deal_value").eq("id", id).maybeSingle();
+  const { data: before } = await supabase.from("website_leads").select("first_name,last_name,status,assigned_to,deal_value").eq("id", id).maybeSingle();
   const patch:Record<string,unknown>={updated_at:new Date().toISOString()};
   if("firstName" in input)patch.first_name=asText(input.firstName,120);
   if("lastName" in input)patch.last_name=asText(input.lastName,120);
@@ -76,21 +78,24 @@ export async function PATCH(request: Request) {
   if(updateError)return NextResponse.json({error:updateError.message},{status:500});
 
   if (before?.status && before.status !== data.status) {
-    await logActivity(supabase, id, "Étape commerciale modifiée", `${stageLabels[before.status] || before.status} → ${stageLabels[data.status] || data.status}`);
+    await logActivity(supabase, id, "Étape commerciale modifiée", `${stageLabels[before.status] || before.status} → ${stageLabels[data.status] || data.status}`, session);
   }
   if ((before?.assigned_to || null) !== (data.assigned_to || null)) {
-    await logActivity(supabase, id, "Responsable commercial modifié", `${before?.assigned_to || "Non assigné"} → ${data.assigned_to || "Non assigné"}`);
+    await logActivity(supabase, id, "Responsable commercial modifié", `${before?.assigned_to || "Non assigné"} → ${data.assigned_to || "Non assigné"}`, session);
   }
   if (Number(before?.deal_value || 0) !== Number(data.deal_value || 0)) {
-    await logActivity(supabase, id, "Valeur de l’opportunité modifiée", `${Number(before?.deal_value || 0)} → ${Number(data.deal_value || 0)}`);
+    await logActivity(supabase, id, "Valeur de l’opportunité modifiée", `${Number(before?.deal_value || 0)} → ${Number(data.deal_value || 0)}`, session);
   }
+  await writeAuditLog(supabase, session, "crm.lead_updated", "lead", id, `Prospect ${before ? `${before.first_name} ${before.last_name}` : id} modifié`, { previousStatus: before?.status ?? null, status: data.status, assignedTo: data.assigned_to ?? null, dealValue: data.deal_value ?? null });
   return NextResponse.json({lead:data});
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase }=requireAdmin(request); if(error||!supabase)return error;
+  const { error, supabase, session }=requireAdmin(request, "crm.write"); if(error||!supabase)return error;
   const id=new URL(request.url).searchParams.get("id")||""; if(!id)return NextResponse.json({error:"Identifiant manquant."},{status:422});
+  const { data: before } = await supabase.from("website_leads").select("first_name,last_name,email").eq("id",id).maybeSingle();
   const {error:deleteError}=await supabase.from("website_leads").delete().eq("id",id);
   if(deleteError)return NextResponse.json({error:deleteError.message},{status:500});
+  await writeAuditLog(supabase, session, "crm.lead_deleted", "lead", id, before ? `${before.first_name} ${before.last_name} supprimé du CRM` : "Prospect supprimé", { email: before?.email ?? null });
   return NextResponse.json({ok:true});
 }
