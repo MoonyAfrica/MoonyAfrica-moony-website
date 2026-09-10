@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin-api";
 export async function GET(request: Request) {
   const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
   const since = new Date(Date.now() - 30 * 86400000).toISOString();
-  const [events, leads, appointments, tickets, campaigns, partners, testimonials] = await Promise.all([
+  const [events, leads, appointments, tickets, campaigns, partners, testimonials, tasks] = await Promise.all([
     supabase.from("website_analytics_events").select("event_name,country,created_at").gte("created_at", since).order("created_at",{ascending:true}).limit(12000),
     supabase.from("website_leads").select("id,created_at,first_name,last_name,email,company,status,deal_value,country,need,assigned_to,updated_at").order("updated_at",{ascending:false}).limit(100),
     supabase.from("website_appointments").select("id,created_at,starts_at,status,provider,meeting_url,notes,lead_id").order("starts_at",{ascending:true}).limit(50),
@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     supabase.from("newsletter_campaigns").select("id,name,subject,status,scheduled_at,sent_at,stats,created_at").order("created_at",{ascending:false}).limit(5),
     supabase.from("website_partners").select("id,name,status,featured,created_at").order("created_at",{ascending:false}).limit(8),
     supabase.from("website_testimonials").select("id,author_name,status,featured,created_at").order("created_at",{ascending:false}).limit(8),
+    supabase.from("website_crm_tasks").select("id,lead_id,title,due_at,status,priority,assigned_to,website_leads(first_name,last_name,company)").in("status",["todo","in_progress"]).order("due_at",{ascending:true,nullsFirst:false}).limit(10),
   ]);
   const firstError=[events.error,leads.error,appointments.error,tickets.error,campaigns.error,partners.error,testimonials.error].find(Boolean);
   if(firstError)return NextResponse.json({error:firstError.message},{status:500});
@@ -27,6 +28,8 @@ export async function GET(request: Request) {
     daily,countries,
     leads:leadRows,
     upcomingAppointments:upcoming,
+    tasks:tasks.error?[]:(tasks.data??[]),
+    tasksAvailable:!tasks.error,
     tickets:tickets.data??[],campaigns:campaigns.data??[],partners:partners.data??[],testimonials:testimonials.data??[],
   });
 }
