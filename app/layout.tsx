@@ -1,4 +1,5 @@
-import type { CSSProperties, Metadata } from "react";
+import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { MarketingLayer } from "@/components/marketing-layer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
