@@ -77,16 +77,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Impossible d’enregistrer votre demande pour le moment." }, { status: 500 });
   }
 
-  void triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
-    lead_id: data.id,
-    lead: company || `${firstName} ${lastName}`,
-    first_name: firstName,
-    last_name: lastName,
-    company,
-    email,
-    status: data.status || "new",
-    assigned_to: data.assigned_to,
-  }).catch(() => undefined);
+  try {
+    await triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
+      lead_id: data.id,
+      lead: company || `${firstName} ${lastName}`,
+      first_name: firstName,
+      last_name: lastName,
+      company,
+      email,
+      status: data.status || "new",
+      assigned_to: data.assigned_to,
+    });
+  } catch {
+    // A lead must never be lost because a non-critical automation could not run.
+  }
 
   return NextResponse.json({ ok: true, leadId: data.id }, { status: 201 });
 }
