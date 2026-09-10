@@ -17,6 +17,7 @@ type AuditRow = {
 
 function moduleFor(action: string, entityType: string | null) {
   const value = `${action} ${entityType ?? ""}`.toLowerCase();
+  if (value.includes("automation")) return "settings";
   if (value.includes("crm") || value.includes("lead")) return "crm";
   if (value.includes("support") || value.includes("ticket")) return "support";
   if (value.includes("appointment") || value.includes("rendez")) return "appointments";
@@ -44,6 +45,7 @@ function allowedForModule(module: string, session: Parameters<typeof hasAdminPer
 }
 
 function hrefFor(module: string, row: AuditRow) {
+  if (row.action.includes("automation")) return "/admin/automatisations";
   if (module === "crm") return row.entity_id ? `/admin/crm?lead=${row.entity_id}` : "/admin/crm";
   if (module === "support") return row.entity_id ? `/admin/service-client?ticket=${row.entity_id}` : "/admin/service-client";
   if (module === "appointments") return "/admin/rendez-vous";
