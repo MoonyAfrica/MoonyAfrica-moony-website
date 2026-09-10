@@ -1,9 +1,13 @@
+import { randomInt, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   ADMIN_COOKIE,
+  adminSessionMaxAgeSeconds,
   createAdminSessionToken,
   getAdminSession,
+  hashMfaCode,
   isAdminAuthConfigured,
+  isGlobalMfaRequired,
   legacyFounderSession,
   validateAdminPassword,
   verifyAdminPassword,
@@ -17,9 +21,38 @@ function sessionResponse(token: string, body: Record<string, unknown>) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 10,
+    maxAge: adminSessionMaxAgeSeconds(),
   });
   return response;
+}
+
+function maskEmail(email: string) {
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  const visible = local.slice(0, Math.min(2, local.length));
+  return `${visible}${"•".repeat(Math.max(3, local.length - visible.length))}@${domain}`;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char] ?? char));
+}
+
+async function sendMfaEmail(email: string, name: string, code: string) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const senderEmail = process.env.BREVO_SENDER_EMAIL;
+  if (!apiKey || !senderEmail) return false;
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "api-key": apiKey, accept: "application/json" },
+    body: JSON.stringify({
+      sender: { name: process.env.BREVO_SENDER_NAME || "MOONY Africa", email: senderEmail },
+      to: [{ email, name }],
+      subject: "Votre code de sécurité MOONY Control Center",
+      htmlContent: `<div style="font-family:Arial,sans-serif;background:#f8f0e5;padding:32px;color:#5b2f22"><div style="max-width:560px;margin:auto;background:#fffaf4;border-radius:24px;padding:36px"><div style="font-family:Georgia,serif;font-size:26px;letter-spacing:.08em">MOONY</div><h1 style="font-family:Georgia,serif;font-weight:400;font-size:30px;margin:28px 0 12px">Code de vérification</h1><p>Bonjour ${escapeHtml(name)},</p><p>Utilisez ce code pour terminer votre connexion au Control Center.</p><div style="font-size:34px;font-weight:700;letter-spacing:.18em;margin:28px 0;color:#7e3518">${code}</div><p style="font-size:13px;color:#80665d">Ce code expire dans 10 minutes. Si vous n’êtes pas à l’origine de cette connexion, ne partagez pas ce code.</p></div></div>`,
+    }),
+  });
+  return response.ok;
 }
 
 export async function GET(request: Request) {
@@ -44,7 +77,7 @@ export async function POST(request: Request) {
     try {
       const { data: user } = await supabase
         .from("control_center_users")
-        .select("id,full_name,email,password_hash,active,role_id")
+        .select("id,full_name,email,password_hash,active,role_id,metadata")
         .ilike("email", email)
         .maybeSingle();
 
@@ -60,7 +93,53 @@ export async function POST(request: Request) {
         if (!role) return NextResponse.json({ error: "Le rôle de ce compte est introuvable." }, { status: 403 });
 
         const permissions = Array.isArray(role.permissions) ? role.permissions.filter((value): value is string => typeof value === "string") : [];
-        const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions };
+        const metadata = user.metadata && typeof user.metadata === "object" ? user.metadata as Record<string, unknown> : {};
+        const mfaRequired = isGlobalMfaRequired() || metadata.mfa_required === true;
+
+        if (mfaRequired) {
+          if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) {
+            return NextResponse.json({ error: "La double authentification est activée mais l’envoi d’e-mails de sécurité n’est pas configuré." }, { status: 503 });
+          }
+
+          const recentSince = new Date(Date.now() - 45_000).toISOString();
+          const { data: recent } = await supabase.from("control_center_login_challenges").select("id,created_at").eq("user_id", user.id).is("consumed_at", null).gte("created_at", recentSince).order("created_at", { ascending: false }).limit(1);
+          if (recent?.length) return NextResponse.json({ error: "Un code vient déjà d’être envoyé. Patientez quelques secondes avant de recommencer." }, { status: 429 });
+
+          const challengeId = randomUUID();
+          const code = String(randomInt(100000, 1_000_000));
+          const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
+          const { error: challengeError } = await supabase.from("control_center_login_challenges").insert({
+            id: challengeId,
+            user_id: user.id,
+            code_hash: hashMfaCode(challengeId, code),
+            expires_at: expiresAt,
+            attempts: 0,
+          });
+          if (challengeError) return NextResponse.json({ error: "Le service de double authentification n’est pas encore prêt. Appliquez la migration de sécurité du Control Center." }, { status: 503 });
+
+          const delivered = await sendMfaEmail(user.email, user.full_name, code);
+          if (!delivered) {
+            await supabase.from("control_center_login_challenges").delete().eq("id", challengeId);
+            return NextResponse.json({ error: "Le code de sécurité n’a pas pu être envoyé. Vérifiez la configuration Brevo." }, { status: 502 });
+          }
+
+          try {
+            await supabase.from("control_center_audit_logs").insert({
+              actor_user_id: user.id,
+              actor_email: user.email,
+              actor_name: user.full_name,
+              actor_role: role.key,
+              action: "login.mfa_challenge",
+              entity_type: "session",
+              entity_id: user.id,
+              summary: "Code de double authentification envoyé",
+            });
+          } catch {}
+
+          return NextResponse.json({ mfaRequired: true, challengeId, email: maskEmail(user.email), expiresAt });
+        }
+
+        const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions, mfa: false };
         const token = createAdminSessionToken(session);
         if (!token) return NextResponse.json({ error: "Configuration de session incomplète." }, { status: 503 });
 
@@ -76,6 +155,7 @@ export async function POST(request: Request) {
             entity_type: "session",
             entity_id: user.id,
             summary: "Connexion au Control Center",
+            metadata: { mfa: false },
           });
         } catch {}
 
