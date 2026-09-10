@@ -12,6 +12,7 @@ import {
   validateAdminPassword,
   verifyAdminPassword,
 } from "@/lib/admin-auth";
+import { createStoredAdminSession, revokeSession } from "@/lib/control-center-sessions";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function sessionResponse(token: string, body: Record<string, unknown>) {
@@ -39,6 +40,13 @@ function escapeHtml(value: string) {
 
 function metadataOf(value: unknown) {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+async function findTeamUser(supabase: any, email: string) {
+  const full = await supabase.from("control_center_users").select("id,full_name,email,password_hash,active,role_id,metadata,must_change_password").ilike("email", email).maybeSingle();
+  if (!full.error) return full.data;
+  const fallback = await supabase.from("control_center_users").select("id,full_name,email,password_hash,active,role_id,metadata").ilike("email", email).maybeSingle();
+  return fallback.data ? { ...fallback.data, must_change_password: false } : null;
 }
 
 async function sendMfaEmail(email: string, name: string, code: string) {
@@ -79,11 +87,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   if (supabase && email) {
     try {
-      const { data: user } = await supabase
-        .from("control_center_users")
-        .select("id,full_name,email,password_hash,active,role_id,metadata")
-        .ilike("email", email)
-        .maybeSingle();
+      const user = await findTeamUser(supabase, email);
 
       if (user) {
         if (!user.active) return NextResponse.json({ error: "Ce compte est désactivé." }, { status: 403 });
@@ -173,7 +177,9 @@ export async function POST(request: Request) {
           return NextResponse.json({ mfaRequired: true, challengeId, email: maskEmail(user.email), expiresAt });
         }
 
-        const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions, mfa: false };
+        const mustChangePassword = Boolean(user.must_change_password);
+        const stored = await createStoredAdminSession(supabase, user.id, request, mustChangePassword);
+        const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions, mfa: false, sid: stored?.id, mustChangePassword };
         const token = createAdminSessionToken(session);
         if (!token) return NextResponse.json({ error: "Configuration de session incomplète." }, { status: 503 });
 
@@ -187,13 +193,13 @@ export async function POST(request: Request) {
             actor_role: role.key,
             action: "login",
             entity_type: "session",
-            entity_id: user.id,
+            entity_id: stored?.id ?? user.id,
             summary: "Connexion au Control Center",
-            metadata: { mfa: false },
+            metadata: { mfa: false, revocableSession: Boolean(stored), mustChangePassword },
           });
         } catch {}
 
-        return sessionResponse(token, { ok: true, session: { ...session, roleName: role.name } });
+        return sessionResponse(token, { ok: true, session: { ...session, roleName: role.name }, mustChangePassword });
       }
     } catch {
       // If team tables are not available yet, legacy founder access below remains usable for bootstrap.
@@ -214,6 +220,7 @@ export async function DELETE(request: Request) {
   const session = getAdminSession(request);
   const supabase = getSupabaseAdmin();
   if (session && supabase) {
+    if (session.sid) await revokeSession(supabase, session.sid, session.sub);
     try {
       await supabase.from("control_center_audit_logs").insert({
         actor_user_id: !session.legacy && session.sub !== "legacy-founder" ? session.sub : null,
@@ -222,7 +229,7 @@ export async function DELETE(request: Request) {
         actor_role: session.role,
         action: "logout",
         entity_type: "session",
-        entity_id: session.sub,
+        entity_id: session.sid ?? session.sub,
         summary: "Déconnexion du Control Center",
       });
     } catch {}
