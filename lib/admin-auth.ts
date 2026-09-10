@@ -113,6 +113,17 @@ export function verifyMfaCode(challengeId: string, code: string, expectedHash: s
   return Boolean(actual && expectedHash && safeEqual(actual, expectedHash));
 }
 
+export function hashPasswordResetToken(challengeId: string, token: string) {
+  const secret = envSecret();
+  if (!secret) return "";
+  return createHmac("sha256", secret).update(`password-reset:${challengeId}:${token}`).digest("base64url");
+}
+
+export function verifyPasswordResetToken(challengeId: string, token: string, expectedHash: string) {
+  const actual = hashPasswordResetToken(challengeId, token);
+  return Boolean(actual && expectedHash && safeEqual(actual, expectedHash));
+}
+
 function readCookie(header: string | null, name: string) {
   if (!header) return "";
   for (const part of header.split(";")) {
