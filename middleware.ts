@@ -7,12 +7,21 @@ const PUBLIC_ADMIN_PATHS = [
   "/admin/mot-de-passe-oublie",
   "/admin/reinitialiser-mot-de-passe",
 ];
+const PUBLIC_ADMIN_API_PATHS = [
+  "/api/admin/session",
+  "/api/admin/session/mfa",
+  "/api/admin/password-reset/request",
+  "/api/admin/password-reset/confirm",
+];
 
 type EdgeSession = {
   sub?: string;
   role?: string;
   permissions?: string[];
   exp?: number;
+  sid?: string;
+  legacy?: boolean;
+  mustChangePassword?: boolean;
 };
 
 function decodeBase64Url(value: string) {
@@ -67,6 +76,35 @@ async function verifySession(token: string): Promise<EdgeSession | null> {
   }
 }
 
+async function storedSessionIsActive(session: EdgeSession) {
+  if (session.legacy || !session.sid) return true;
+  const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  if (!baseUrl || !serviceKey) return true;
+
+  try {
+    const endpoint = new URL("/rest/v1/control_center_sessions", baseUrl);
+    endpoint.searchParams.set("select", "id,user_id,expires_at,revoked_at");
+    endpoint.searchParams.set("id", `eq.${session.sid}`);
+    endpoint.searchParams.set("user_id", `eq.${session.sub}`);
+    endpoint.searchParams.set("revoked_at", "is.null");
+    endpoint.searchParams.set("limit", "1");
+    const response = await fetch(endpoint, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      cache: "no-store",
+    });
+    // Compatibility while the session migration is being rolled out: old environments
+    // continue to rely on the signed/expiring cookie until the table exists.
+    if (!response.ok) return true;
+    const rows = await response.json() as Array<{ expires_at?: string }>;
+    if (!rows.length) return false;
+    const expiresAt = rows[0]?.expires_at ? new Date(rows[0].expires_at).getTime() : 0;
+    return expiresAt > Date.now();
+  } catch {
+    return true;
+  }
+}
+
 function requiredPermissions(pathname: string): string[] | null {
   if (pathname === "/admin" || pathname.startsWith("/admin/mon-compte")) return null;
   if (pathname.startsWith("/admin/equipe")) return ["team.manage"];
@@ -89,25 +127,51 @@ function hasAnyPermission(session: EdgeSession, permissions: string[] | null) {
   return owned.includes("*") || permissions.some((permission) => owned.includes(permission));
 }
 
+function isPublicPath(pathname: string) {
+  return PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+    || PUBLIC_ADMIN_API_PATHS.includes(pathname);
+}
+
+function unauthenticated(request: NextRequest, isApi: boolean, clearCookie = false) {
+  if (isApi) {
+    const response = NextResponse.json({ error: "Session administrateur requise ou expirée." }, { status: 401 });
+    if (clearCookie) response.cookies.delete(COOKIE);
+    return secure(response);
+  }
+  const url = request.nextUrl.clone();
+  url.pathname = "/admin/login";
+  url.search = "";
+  url.searchParams.set("returnTo", `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  const response = NextResponse.redirect(url);
+  if (clearCookie) response.cookies.delete(COOKIE);
+  return secure(response);
+}
+
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  if (PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
-    return secure(NextResponse.next());
-  }
+  const isApi = pathname.startsWith("/api/admin/");
+  if (isPublicPath(pathname)) return secure(NextResponse.next());
 
   const token = request.cookies.get(COOKIE)?.value ?? "";
   const session = token ? await verifySession(token) : null;
-  if (!session) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    url.search = "";
-    url.searchParams.set("returnTo", `${pathname}${request.nextUrl.search}`);
-    const response = NextResponse.redirect(url);
-    if (token) response.cookies.delete(COOKIE);
-    return secure(response);
+  if (!session) return unauthenticated(request, isApi, Boolean(token));
+
+  const storedActive = await storedSessionIsActive(session);
+  if (!storedActive) return unauthenticated(request, isApi, true);
+
+  if (session.mustChangePassword) {
+    const allowedPage = pathname.startsWith("/admin/mon-compte");
+    const allowedApi = pathname === "/api/admin/account" || pathname.startsWith("/api/admin/account/sessions");
+    if (!allowedPage && !allowedApi) {
+      if (isApi) return secure(NextResponse.json({ error: "Vous devez choisir un mot de passe personnel avant de continuer.", mustChangePassword: true }, { status: 428 }));
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/mon-compte";
+      url.search = "?security=change-password";
+      return secure(NextResponse.redirect(url));
+    }
   }
 
-  if (!hasAnyPermission(session, requiredPermissions(pathname))) {
+  if (!isApi && !hasAnyPermission(session, requiredPermissions(pathname))) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/acces-refuse";
     url.search = "";
@@ -119,5 +183,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*"],
 };
