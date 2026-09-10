@@ -33,20 +33,38 @@ async function syncToBrevo(email: string, firstName: string) {
   }
 }
 
+function redirectBack(request: Request, state: "ok" | "error") {
+  const referer = request.headers.get("referer");
+  const target = new URL(referer || "/", request.url);
+  target.searchParams.set("newsletter", state);
+  return NextResponse.redirect(target, 303);
+}
+
 export async function POST(request: Request) {
+  const contentType = request.headers.get("content-type") || "";
+  const htmlForm = contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data");
   const supabase = getSupabaseAdmin();
-  if (!supabase) return NextResponse.json({ error: "La newsletter n’est pas encore reliée à la base de données." }, { status: 503 });
+  if (!supabase) return htmlForm ? redirectBack(request, "error") : NextResponse.json({ error: "La newsletter n’est pas encore reliée à la base de données." }, { status: 503 });
 
   let body: Record<string, unknown>;
-  try { body = await request.json(); } catch { return NextResponse.json({ error: "Requête invalide." }, { status: 400 }); }
+  try {
+    if (htmlForm) {
+      const form = await request.formData();
+      body = Object.fromEntries(form.entries());
+    } else {
+      body = await request.json();
+    }
+  } catch {
+    return htmlForm ? redirectBack(request, "error") : NextResponse.json({ error: "Requête invalide." }, { status: 400 });
+  }
 
   const website = text(body.website, 200);
-  if (website) return NextResponse.json({ ok: true });
+  if (website) return htmlForm ? redirectBack(request, "ok") : NextResponse.json({ ok: true });
 
   const email = text(body.email).toLowerCase();
   const firstName = text(body.firstName, 120);
   const source = text(body.source, 120) || "website";
-  if (!email || !email.includes("@")) return NextResponse.json({ error: "Merci de renseigner une adresse e-mail valide." }, { status: 422 });
+  if (!email || !email.includes("@")) return htmlForm ? redirectBack(request, "error") : NextResponse.json({ error: "Merci de renseigner une adresse e-mail valide." }, { status: 422 });
 
   const { error } = await supabase.from("newsletter_subscribers").upsert({
     email,
@@ -59,9 +77,9 @@ export async function POST(request: Request) {
 
   if (error) {
     console.error("MOONY newsletter subscription failed", error);
-    return NextResponse.json({ error: "Inscription impossible pour le moment." }, { status: 500 });
+    return htmlForm ? redirectBack(request, "error") : NextResponse.json({ error: "Inscription impossible pour le moment." }, { status: 500 });
   }
 
   const syncedToBrevo = await syncToBrevo(email, firstName);
-  return NextResponse.json({ ok: true, syncedToBrevo }, { status: 201 });
+  return htmlForm ? redirectBack(request, "ok") : NextResponse.json({ ok: true, syncedToBrevo }, { status: 201 });
 }
