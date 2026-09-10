@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Mail,
   Megaphone,
+  Menu,
   MessageCircleMore,
   Palette,
   Settings,
@@ -30,6 +31,7 @@ const groups = [
     items: [
       ["Dashboard", "/admin", LayoutDashboard],
       ["Site & Design", "/admin/site-design", Palette],
+      ["Navigation & Footer", "/admin/navigation", Menu],
       ["Pages", "/admin/pages", FileText],
       ["Historique", "/admin/historique", History],
       ["Médias", "/admin/medias", ImageIcon],
