@@ -1,121 +1,28 @@
+"use client";
+
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AdminCard, AdminWorkspace } from "@/components/admin-workspace";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
-type Lead = {
-  id: string;
-  created_at: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  company: string | null;
-  status: "new" | "to_contact" | "contacted" | "appointment" | "proposal" | "negotiation" | "won" | "lost";
-  deal_value: number | null;
-  country: string | null;
-  assigned_to: string | null;
-  need: string;
-};
+type Status="new"|"to_contact"|"contacted"|"appointment"|"proposal"|"negotiation"|"won"|"lost";
+type Lead={id:string;created_at:string;updated_at:string;first_name:string;last_name:string;email:string;phone:string|null;company:string|null;role_title:string|null;need:string;message:string|null;source:string;status:Status;assigned_to:string|null;deal_value:number|null;country:string|null;city:string|null;notes:string|null;last_contacted_at:string|null};
+const stages:[Status,string][]=[["new","Nouveau"],["to_contact","À contacter"],["contacted","Contacté"],["appointment","RDV planifié"],["proposal","Proposition envoyée"],["negotiation","Négociation"],["won","Signé"],["lost","Perdu"]];
+const empty={firstName:"",lastName:"",email:"",phone:"",company:"",roleTitle:"",need:"entreprise",source:"control-center",status:"new" as Status,assignedTo:"",dealValue:"",country:"",city:"",message:"",notes:""};
+function money(v:number){return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(v)}
 
-const stageConfig = [
-  ["new", "Nouveau"],
-  ["to_contact", "À contacter"],
-  ["contacted", "Contacté"],
-  ["appointment", "RDV planifié"],
-  ["proposal", "Proposition envoyée"],
-  ["negotiation", "Négociation"],
-  ["won", "Signé"],
-  ["lost", "Perdu"],
-] as const;
-
-const fallbackLeads: Lead[] = [
-  { id: "demo-1", created_at: new Date().toISOString(), first_name: "Awa", last_name: "Diop", email: "awa@example.com", company: "Soleil Maternité", status: "new", deal_value: 12000, country: "Sénégal", assigned_to: "A. Koné", need: "entreprise" },
-  { id: "demo-2", created_at: new Date().toISOString(), first_name: "Fatou", last_name: "Bâ", email: "fatou@example.com", company: "MamaCare", status: "to_contact", deal_value: 15000, country: "Côte d’Ivoire", assigned_to: "M. Koné", need: "partenariat" },
-  { id: "demo-3", created_at: new Date().toISOString(), first_name: "Claire", last_name: "Dubois", email: "claire@example.com", company: "Santé & Elles", status: "contacted", deal_value: 10000, country: "France", assigned_to: "S. Lemoine", need: "professionnel" },
-  { id: "demo-4", created_at: new Date().toISOString(), first_name: "Mariam", last_name: "Diallo", email: "mariam@example.com", company: "Femina Plus", status: "appointment", deal_value: 18000, country: "Sénégal", assigned_to: "A. Koné", need: "demonstration" },
-  { id: "demo-5", created_at: new Date().toISOString(), first_name: "Yasmine", last_name: "Ben Ali", email: "yasmine@example.com", company: "Care for Her", status: "proposal", deal_value: 12000, country: "Maroc", assigned_to: "M. Koné", need: "entreprise" },
-  { id: "demo-6", created_at: new Date().toISOString(), first_name: "Emily", last_name: "Johnson", email: "emily@example.com", company: "Women First", status: "negotiation", deal_value: 22000, country: "Canada", assigned_to: "S. Lemoine", need: "partenariat" },
-  { id: "demo-7", created_at: new Date().toISOString(), first_name: "Ndeye", last_name: "Sall", email: "ndeye@example.com", company: "Maison de la Femme", status: "won", deal_value: 35000, country: "Côte d’Ivoire", assigned_to: "A. Koné", need: "entreprise" },
-  { id: "demo-8", created_at: new Date().toISOString(), first_name: "Sarah", last_name: "Plus", email: "sarah@example.com", company: "Santé Plus", status: "lost", deal_value: 8000, country: "Algérie", assigned_to: "M. Koné", need: "professionnel" },
-];
-
-function money(value: number) {
-  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
-}
-
-async function loadLeads() {
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return { leads: fallbackLeads, live: false };
-
-  const { data, error } = await supabase
-    .from("website_leads")
-    .select("id,created_at,first_name,last_name,email,company,status,deal_value,country,assigned_to,need")
-    .order("created_at", { ascending: false })
-    .limit(80);
-
-  if (error) {
-    console.error("MOONY CRM load failed", error);
-    return { leads: fallbackLeads, live: false };
-  }
-
-  return { leads: (data ?? []) as Lead[], live: true };
-}
-
-export default async function CRMPage() {
-  const { leads, live } = await loadLeads();
-
-  return (
-    <AdminWorkspace
-      active="CRM"
-      title="Commercial & Relation client"
-      subtitle="Pilotez vos opportunités, vos comptes et l’historique complet des échanges commerciaux."
-      actions={<><button className="rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm">Importer</button><button className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white">+ Ajouter un lead</button></>}
-    >
-      <div className="mb-4 flex items-center justify-between rounded-xl border border-[#5b2f22]/9 bg-white/70 px-4 py-3 text-xs">
-        <span className="text-[#5b2f22]/58">Source des données CRM</span>
-        <span className={`rounded-full px-3 py-1 font-semibold ${live ? "bg-[#e4f3e8] text-emerald-700" : "bg-[#f6e7dc] text-[#8d4b32]"}`}>{live ? "Base connectée" : "Données de démonstration"}</span>
-      </div>
-
-      <AdminCard title="Pipeline commercial" action={<div className="flex gap-2"><input placeholder="Rechercher un lead…" className="rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2 text-xs outline-none"/><button className="rounded-lg border border-[#5b2f22]/10 px-3 py-2 text-xs">Tous les responsables</button></div>}>
-        <div className="grid gap-2 overflow-x-auto xl:grid-cols-8">
-          {stageConfig.map(([status, label], index) => {
-            const stageLeads = leads.filter((lead) => lead.status === status);
-            const total = stageLeads.reduce((sum, lead) => sum + Number(lead.deal_value ?? 0), 0);
-            return (
-              <div key={status} className={`min-w-[170px] rounded-xl p-3 ${index === 6 ? "bg-[#e3f3e8]" : index === 7 ? "bg-[#f8e3e1]" : index === 3 || index === 4 || index === 5 ? "bg-[#fbf0dd]" : "bg-[#f7eee8]"}`}>
-                <div className="flex items-start justify-between gap-2"><div><p className="text-xs font-semibold">{label} <span className="font-normal text-[#5b2f22]/42">({stageLeads.length})</span></p><p className="moony-serif mt-1 text-xl">{money(total)}</p></div><button className="text-[#5b2f22]/35">•••</button></div>
-                <div className="mt-3 space-y-2">
-                  {stageLeads.length ? stageLeads.map((lead) => (
-                    <button key={lead.id} className="w-full rounded-lg bg-white p-3 text-left text-[11px] shadow-sm">
-                      <strong className="block truncate">{lead.company || `${lead.first_name} ${lead.last_name}`}</strong>
-                      <span className="mt-1 block truncate text-[#5b2f22]/42">{lead.country || "Pays non renseigné"} · {money(Number(lead.deal_value ?? 0))}</span>
-                      <span className="mt-2 block truncate text-[#8d4b32]">{lead.first_name} {lead.last_name}</span>
-                    </button>
-                  )) : <div className="rounded-lg border border-dashed border-[#5b2f22]/14 px-3 py-6 text-center text-[10px] text-[#5b2f22]/38">Aucune opportunité</div>}
-                </div>
-                <button className="mt-3 w-full text-[11px] text-[#5b2f22]/55">+ Ajouter un lead</button>
-              </div>
-            );
-          })}
-        </div>
-      </AdminCard>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_.8fr]">
-        <AdminCard title="Contacts récents">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="text-[#5b2f22]/45"><tr><th className="pb-3">Contact</th><th>Entreprise</th><th>Pays</th><th>Responsable</th><th>Besoin</th><th>Statut</th></tr></thead>
-              <tbody>{leads.slice(0, 8).map((lead) => <tr key={lead.id} className="border-t border-[#5b2f22]/8"><td className="py-3 font-medium">{lead.first_name} {lead.last_name}<span className="block text-[10px] font-normal text-[#5b2f22]/38">{lead.email}</span></td><td>{lead.company || "—"}</td><td>{lead.country || "—"}</td><td>{lead.assigned_to || "Non assigné"}</td><td>{lead.need}</td><td><span className="rounded-full bg-[#f3e4d9] px-2 py-1">{stageConfig.find(([key]) => key === lead.status)?.[1] ?? lead.status}</span></td></tr>)}</tbody>
-            </table>
-          </div>
-        </AdminCard>
-
-        <AdminCard title="Vue commerciale">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <div className="rounded-xl bg-[#f7eee8] p-4"><span className="text-xs text-[#5b2f22]/48">Leads enregistrés</span><strong className="moony-serif mt-2 block text-3xl font-normal">{leads.length}</strong></div>
-            <div className="rounded-xl bg-[#eef6ef] p-4"><span className="text-xs text-[#5b2f22]/48">Opportunités gagnées</span><strong className="moony-serif mt-2 block text-3xl font-normal">{leads.filter((lead) => lead.status === "won").length}</strong></div>
-            <div className="rounded-xl bg-[#f8eee7] p-4"><span className="text-xs text-[#5b2f22]/48">Valeur totale du pipeline</span><strong className="moony-serif mt-2 block text-3xl font-normal">{money(leads.filter((lead) => lead.status !== "lost").reduce((sum, lead) => sum + Number(lead.deal_value ?? 0), 0))}</strong></div>
-          </div>
-        </AdminCard>
-      </div>
-    </AdminWorkspace>
-  );
+export default function CRMPage(){
+ const [leads,setLeads]=useState<Lead[]>([]);const [selected,setSelected]=useState<Lead|null>(null);const [form,setForm]=useState(empty);const [query,setQuery]=useState("");const [message,setMessage]=useState("");const [loading,setLoading]=useState(true);
+ async function load(q=query){setLoading(true);const r=await fetch(`/api/admin/leads${q?`?q=${encodeURIComponent(q)}`:""}`,{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}const d=await r.json();setLeads(d.leads??[]);setLoading(false)}
+ useEffect(()=>{void load("")},[]);
+ function choose(x:Lead){setSelected(x);setForm({firstName:x.first_name,lastName:x.last_name,email:x.email,phone:x.phone??"",company:x.company??"",roleTitle:x.role_title??"",need:x.need,source:x.source,status:x.status,assignedTo:x.assigned_to??"",dealValue:x.deal_value==null?"":String(x.deal_value),country:x.country??"",city:x.city??"",message:x.message??"",notes:x.notes??""});setMessage("")}
+ function create(){setSelected(null);setForm(empty);setMessage("")}
+ async function save(e:FormEvent){e.preventDefault();setMessage("Enregistrement…");const r=await fetch("/api/admin/leads",{method:selected?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,id:selected?.id,dealValue:form.dealValue===""?null:Number(form.dealValue)})});const d=await r.json();if(!r.ok){setMessage(d.error??"Erreur");return;}setMessage("Enregistré.");await load();if(d.lead)choose(d.lead)}
+ async function changeStage(lead:Lead,status:Status){const r=await fetch("/api/admin/leads",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:lead.id,status,markContacted:status==="contacted"})});if(r.ok){const d=await r.json();setLeads(current=>current.map(x=>x.id===lead.id?d.lead:x));if(selected?.id===lead.id)choose(d.lead)}}
+ async function remove(){if(!selected||!confirm("Supprimer définitivement ce lead ?"))return;const r=await fetch(`/api/admin/leads?id=${selected.id}`,{method:"DELETE"});if(r.ok){create();await load()}}
+ const pipelineValue=useMemo(()=>leads.filter(x=>x.status!=="lost").reduce((s,x)=>s+Number(x.deal_value||0),0),[leads]);
+ return <AdminWorkspace active="CRM" title="Commercial & Relation client" subtitle="Pilotez vos opportunités, vos comptes, vos responsables et l’historique des échanges commerciaux." actions={<button onClick={create} className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white">+ Ajouter un lead</button>}>
+  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[["Leads",leads.length],["Pipeline",money(pipelineValue)],["Signés",leads.filter(x=>x.status==="won").length],["À relancer",leads.filter(x=>x.status==="to_contact"||x.status==="contacted").length]].map(([l,v])=><div key={String(l)} className="admin-card admin-shadow p-5"><p className="text-xs text-[#5b2f22]/45">{l}</p><p className="moony-serif mt-2 text-4xl">{loading?"…":v}</p></div>)}</div>
+  <div className="mt-4"><AdminCard title="Pipeline commercial" action={<form onSubmit={e=>{e.preventDefault();void load(query)}} className="flex gap-2"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher un lead…" className="rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2 text-xs outline-none"/><button className="rounded-lg border border-[#5b2f22]/10 px-3 py-2 text-xs">Rechercher</button></form>}><div className="flex gap-2 overflow-x-auto pb-2">{stages.map(([status,label],index)=>{const rows=leads.filter(x=>x.status===status);const total=rows.reduce((s,x)=>s+Number(x.deal_value||0),0);return <div key={status} className={`min-w-[190px] flex-1 rounded-xl p-3 ${index===6?"bg-[#e3f3e8]":index===7?"bg-[#f8e3e1]":index>=3?"bg-[#fbf0dd]":"bg-[#f7eee8]"}`}><div className="mb-3"><p className="text-xs font-semibold">{label} <span className="font-normal text-[#5b2f22]/42">({rows.length})</span></p><p className="moony-serif mt-1 text-xl">{money(total)}</p></div><div className="space-y-2">{rows.map(lead=><button key={lead.id} onClick={()=>choose(lead)} className={`w-full rounded-lg bg-white p-3 text-left text-[11px] shadow-sm ${selected?.id===lead.id?"ring-2 ring-[#b9693d]/40":""}`}><strong className="block truncate">{lead.company||`${lead.first_name} ${lead.last_name}`}</strong><span className="mt-1 block truncate text-[#5b2f22]/42">{lead.country||"Pays non renseigné"} · {money(Number(lead.deal_value||0))}</span><span className="mt-2 block truncate text-[#8d4b32]">{lead.first_name} {lead.last_name}</span></button>)}</div><button onClick={()=>{create();setForm(current=>({...current,status}))}} className="mt-3 w-full text-center text-[11px] text-[#5b2f22]/55">+ Ajouter un lead</button></div>})}</div></AdminCard></div>
+  <div className="mt-4 grid gap-4 xl:grid-cols-[.9fr_1.1fr]"><AdminCard title="Contacts récents"><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-xs"><thead className="text-[#5b2f22]/45"><tr><th className="pb-3">Contact</th><th>Entreprise</th><th>Pays</th><th>Responsable</th><th>Statut</th></tr></thead><tbody>{leads.slice(0,12).map(lead=><tr key={lead.id} onClick={()=>choose(lead)} className="cursor-pointer border-t border-[#5b2f22]/8 hover:bg-[#fbf2eb]"><td className="py-3 font-medium">{lead.first_name} {lead.last_name}<span className="block text-[10px] font-normal text-[#5b2f22]/38">{lead.email}</span></td><td>{lead.company||"—"}</td><td>{lead.country||"—"}</td><td>{lead.assigned_to||"Non assigné"}</td><td>{stages.find(([key])=>key===lead.status)?.[1]}</td></tr>)}</tbody></table></div></AdminCard>
+  <AdminCard title={selected?"Fiche opportunité":"Nouveau lead"}><form onSubmit={save} className="space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-2"><label>Prénom<input required value={form.firstName} onChange={e=>setForm({...form,firstName:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Nom<input required value={form.lastName} onChange={e=>setForm({...form,lastName:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>E-mail<input required type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Téléphone<input value={form.phone} onChange={e=>setForm({...form,phone:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Entreprise<input value={form.company} onChange={e=>setForm({...form,company:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Fonction<input value={form.roleTitle} onChange={e=>setForm({...form,roleTitle:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Pays<input value={form.country} onChange={e=>setForm({...form,country:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Ville<input value={form.city} onChange={e=>setForm({...form,city:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Responsable<input value={form.assignedTo} onChange={e=>setForm({...form,assignedTo:e.target.value})} placeholder="A. Koné" className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Valeur opportunité (€)<input type="number" min="0" value={form.dealValue} onChange={e=>setForm({...form,dealValue:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label>Besoin<select value={form.need} onChange={e=>setForm({...form,need:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"><option value="entreprise">Entreprise</option><option value="professionnel">Professionnel</option><option value="partenariat">Partenariat</option><option value="demonstration">Démonstration</option><option value="rappel">Rappel</option><option value="presse">Presse</option><option value="autre">Autre</option></select></label><label>Étape<select value={form.status} onChange={e=>setForm({...form,status:e.target.value as Status})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5">{stages.map(([s,l])=><option key={s} value={s}>{l}</option>)}</select></label></div><label className="block">Message / demande initiale<textarea rows={3} value={form.message} onChange={e=>setForm({...form,message:e.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label className="block">Notes commerciales<textarea rows={5} value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})} placeholder="Compte-rendu, prochaines actions, objections, contexte…" className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label>{selected?<div><p className="mb-2 text-xs font-semibold text-[#5b2f22]/55">Déplacer rapidement dans le pipeline</p><div className="flex flex-wrap gap-2">{stages.map(([s,l])=><button key={s} type="button" onClick={()=>void changeStage(selected,s)} className={`rounded-full px-3 py-1.5 text-xs ${selected.status===s?"bg-[#7e3518] text-white":"border border-[#5b2f22]/12 bg-white"}`}>{l}</button>)}</div></div>:null}<div className="flex flex-wrap items-center gap-2"><button className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-white">{selected?"Enregistrer la fiche":"Créer le lead"}</button>{selected?<button type="button" onClick={remove} className="rounded-lg border border-red-200 px-4 py-2.5 text-red-700">Supprimer</button>:null}<span className="text-xs text-[#5b2f22]/50">{message}</span></div></form></AdminCard></div>
+ </AdminWorkspace>;
 }
