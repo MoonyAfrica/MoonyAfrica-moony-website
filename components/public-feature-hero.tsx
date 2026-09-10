@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BookOpen, HeartHandshake, Sprout } from "lucide-react";
 import { getPublishedPage, heroLines } from "@/lib/cms";
+import { CmsSections } from "./cms-sections";
 import { PublicFooter } from "./public-footer";
 import { PublicHeader } from "./public-header";
 
@@ -111,6 +112,7 @@ export async function PublicFeatureHero({
           </div>
         </div>
       </section>
+      <CmsSections sections={cms?.sections ?? []} />
       <PublicFooter />
     </main>
   );
