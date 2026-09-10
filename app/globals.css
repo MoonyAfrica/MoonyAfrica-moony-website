@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+:root {
+  --moony-ivory: #f7f0e6;
+  --moony-cream: #f2e2ce;
+  --moony-peach: #dfa987;
+  --moony-terracotta: #b76f4b;
+  --moony-brown: #5b2f22;
+  --moony-espresso: #2e1c18;
+  --moony-white: #fffdfa;
+  --moony-border: rgba(91, 47, 34, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--moony-ivory);
+  color: var(--moony-espresso);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--moony-peach);
+  color: var(--moony-espresso);
+}
+
+.moony-paper {
+  background-color: var(--moony-ivory);
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(183, 111, 75, 0.07), transparent 26%),
+    radial-gradient(circle at 80% 30%, rgba(223, 169, 135, 0.10), transparent 30%);
+}
+
+.moony-serif {
+  font-family: Georgia, "Times New Roman", serif;
+}
