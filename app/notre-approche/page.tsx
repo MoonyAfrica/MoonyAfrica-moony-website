@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import { PublicFeatureHero } from "@/components/public-feature-hero";
 import { getPublishedPage, heroLines } from "@/lib/cms";
+import { buildCmsMetadata } from "@/lib/seo";
 
 const fallbackTitle = ["Écouter,", "orienter,", "accompagner."];
 const fallbackBody = "MOONY relie information fiable, communauté bienveillante et accès à des professionnelles pour accompagner les femmes à chaque étape de leur vie.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPublishedPage("/notre-approche");
-  return {
-    title: page?.seo_title || "Notre approche — MOONY Africa",
-    description: page?.seo_description || page?.hero?.body || fallbackBody,
-  };
+  return buildCmsMetadata({ page, fallbackTitle: "Notre approche — MOONY Africa", fallbackDescription: fallbackBody, path: "/notre-approche" });
 }
 
 export default async function ApproachPage() {
