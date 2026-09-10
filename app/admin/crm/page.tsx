@@ -11,7 +11,7 @@ function money(v:number){return new Intl.NumberFormat("fr-FR",{style:"currency",
 
 export default function CRMPage(){
  const [leads,setLeads]=useState<Lead[]>([]);const [selected,setSelected]=useState<Lead|null>(null);const [form,setForm]=useState(empty);const [query,setQuery]=useState("");const [message,setMessage]=useState("");const [loading,setLoading]=useState(true);
- async function load(q=query){setLoading(true);const r=await fetch(`/api/admin/leads${q?`?q=${encodeURIComponent(q)}`:""}`,{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}const d=await r.json();setLeads(d.leads??[]);setLoading(false)}
+ async function load(q=query){setLoading(true);const r=await fetch(`/api/admin/leads${q?`?q=${encodeURIComponent(q)}`:""}`,{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}const d=await r.json();const rows=(d.leads??[]) as Lead[];setLeads(rows);const requested=typeof window!=="undefined"?new URLSearchParams(window.location.search).get("lead"):null;const target=requested?rows.find(item=>item.id===requested):null;if(target)choose(target);setLoading(false)}
  useEffect(()=>{void load("")},[]);
  function choose(x:Lead){setSelected(x);setForm({firstName:x.first_name,lastName:x.last_name,email:x.email,phone:x.phone??"",company:x.company??"",roleTitle:x.role_title??"",need:x.need,source:x.source,status:x.status,assignedTo:x.assigned_to??"",dealValue:x.deal_value==null?"":String(x.deal_value),country:x.country??"",city:x.city??"",message:x.message??"",notes:x.notes??""});setMessage("")}
  function create(){setSelected(null);setForm(empty);setMessage("")}
