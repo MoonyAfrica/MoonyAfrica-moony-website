@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 const statuses = new Set(["todo", "in_progress", "done", "cancelled"]);
 const priorities = new Set(["low", "normal", "high", "urgent"]);
@@ -9,7 +9,7 @@ async function parseBody(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "crm.read");
   if (error || !supabase) return error;
   const url = new URL(request.url);
   const leadId = url.searchParams.get("leadId")?.trim() || "";
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "crm.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -44,16 +44,18 @@ export async function POST(request: Request) {
   }).select("*").single();
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   await supabase.from("website_leads").update({ updated_at: new Date().toISOString() }).eq("id", leadId);
+  await writeAuditLog(supabase, session, "crm.task_created", "crm_task", data.id, title, { leadId, dueAt:data.due_at, priority:data.priority });
   return NextResponse.json({ task: data }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "crm.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
   const id = asText(body.id, 80);
   if (!id) return NextResponse.json({ error: "Tâche manquante." }, { status: 422 });
+  const { data: before } = await supabase.from("website_crm_tasks").select("lead_id,title,status,due_at,assigned_to").eq("id",id).maybeSingle();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if ("title" in body) patch.title = asText(body.title, 260);
   if ("dueAt" in body) patch.due_at = asNullableText(body.dueAt, 80);
@@ -66,15 +68,18 @@ export async function PATCH(request: Request) {
   if ("notes" in body) patch.notes = asNullableText(body.notes, 3000);
   const { data, error: updateError } = await supabase.from("website_crm_tasks").update(patch).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "crm.task_updated", "crm_task", id, data.title, { leadId:data.lead_id, previousStatus:before?.status ?? null, status:data.status, dueAt:data.due_at, assignedTo:data.assigned_to });
   return NextResponse.json({ task: data });
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "crm.write");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id")?.trim() || "";
   if (!id) return NextResponse.json({ error: "Tâche manquante." }, { status: 422 });
+  const { data: before } = await supabase.from("website_crm_tasks").select("lead_id,title").eq("id",id).maybeSingle();
   const { error: deleteError } = await supabase.from("website_crm_tasks").delete().eq("id", id);
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "crm.task_deleted", "crm_task", id, before?.title || "Tâche CRM supprimée", { leadId:before?.lead_id ?? null });
   return NextResponse.json({ ok: true });
 }
