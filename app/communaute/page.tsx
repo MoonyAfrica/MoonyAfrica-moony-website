@@ -5,6 +5,7 @@ import { CmsSections } from "@/components/cms-sections";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
 import { getPublishedPage } from "@/lib/cms";
+import { buildCmsMetadata } from "@/lib/seo";
 import { siteConfig } from "@/lib/site-config";
 
 const pillars = [
@@ -22,10 +23,7 @@ const fallbackHero = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPublishedPage("/communaute");
-  return {
-    title: page?.seo_title || "Communauté — MOONY Africa",
-    description: page?.seo_description || page?.hero?.body || fallbackHero.body,
-  };
+  return buildCmsMetadata({ page, fallbackTitle: "Communauté — MOONY Africa", fallbackDescription: fallbackHero.body, path: "/communaute" });
 }
 
 function safeBackgroundUrl(value:string){return value.replace(/["'\n\r()]/g,"");}
