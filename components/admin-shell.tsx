@@ -14,12 +14,12 @@ import {
   Megaphone,
   MessageCircleMore,
   Palette,
-  Search,
   Settings,
   ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
+import { AdminGlobalSearch } from "./admin-global-search";
 import { MoonyLogo } from "./moony-logo";
 
 const groups = [
@@ -109,10 +109,7 @@ export function AdminShell({ active, children }: { active: string; children: Rea
         <section className="min-w-0">
           <header className="sticky top-0 z-30 flex h-[66px] items-center border-b border-[#5b2f22]/10 bg-[#fffdf9]/94 px-5 backdrop-blur-xl lg:px-7">
             <div className="moony-serif hidden shrink-0 text-[23px] text-[#5b2f22] xl:block">Control Center</div>
-            <div className="mx-auto flex w-full max-w-[650px] items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-3 py-2.5 text-[12px] text-[#5b2f22]/45 xl:ml-10 xl:mr-auto">
-              <Search size={16} />
-              <span>Rechercher un contact, une page, un article…</span>
-            </div>
+            <AdminGlobalSearch />
             <div className="ml-4 flex items-center gap-4">
               <button className="relative rounded-full p-2 transition hover:bg-[#f5e8df]" aria-label="Notifications">
                 <Bell size={18} />
