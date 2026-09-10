@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hashAdminPassword, verifyPasswordResetToken } from "@/lib/admin-auth";
+import { revokeUserSessions } from "@/lib/control-center-sessions";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const { error: passwordError } = await supabase.from("control_center_users").update({
     password_hash: hashAdminPassword(password),
+    must_change_password: false,
     metadata: { ...metadata, failed_login_attempts: 0, locked_until: null, password_reset_at: now },
     updated_at: now,
   }).eq("id", user.id);
@@ -41,6 +43,7 @@ export async function POST(request: Request) {
     supabase.from("control_center_password_resets").update({ consumed_at: now }).eq("id", id),
     supabase.from("control_center_password_resets").update({ consumed_at: now }).eq("user_id", user.id).is("consumed_at", null),
     supabase.from("control_center_login_challenges").delete().eq("user_id", user.id),
+    revokeUserSessions(supabase, user.id),
   ]);
 
   try {
@@ -51,7 +54,7 @@ export async function POST(request: Request) {
       action: "password_reset.completed",
       entity_type: "control_center_user",
       entity_id: user.id,
-      summary: "Mot de passe réinitialisé depuis un lien de récupération",
+      summary: "Mot de passe réinitialisé et sessions actives révoquées",
     });
   } catch {}
 
