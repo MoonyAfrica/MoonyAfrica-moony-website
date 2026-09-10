@@ -3,7 +3,6 @@ import {
   BarChart3,
   BookOpen,
   CalendarDays,
-  ChevronDown,
   ClipboardList,
   FileText,
   FolderOpen,
@@ -23,6 +22,7 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
+import { AdminAccountMenu } from "./admin-account-menu";
 import { AdminGlobalSearch } from "./admin-global-search";
 import { AdminNotifications } from "./admin-notifications";
 import { MoonyLogo } from "./moony-logo";
@@ -122,11 +122,7 @@ export function AdminShell({ active, children }: { active: string; children: Rea
             <AdminGlobalSearch />
             <div className="ml-4 flex items-center gap-4">
               <AdminNotifications />
-              <div className="hidden items-center gap-2 border-l border-[#5b2f22]/10 pl-4 sm:flex">
-                <div className="grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(145deg,#d8a17e,#a95631)] text-[10px] font-semibold text-white">MA</div>
-                <div className="text-[11px] leading-[1.25]"><strong className="block font-semibold">MOONY Admin</strong><span className="text-[#5b2f22]/45">Control Center</span></div>
-                <ChevronDown size={13} />
-              </div>
+              <AdminAccountMenu />
             </div>
           </header>
           <div className="p-4 sm:p-5 lg:p-7">{children}</div>
