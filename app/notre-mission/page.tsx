@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { PublicFeatureHero } from "@/components/public-feature-hero";
 import { getPublishedPage, heroLines } from "@/lib/cms";
+import { buildCmsMetadata } from "@/lib/seo";
 
 const fallbackTitle = [
   "Notre mission",
@@ -10,10 +11,7 @@ const fallbackBody = "De la puberté à la maternité, du post-partum au bien-ê
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPublishedPage("/notre-mission");
-  return {
-    title: page?.seo_title || "Notre mission — MOONY Africa",
-    description: page?.seo_description || page?.hero?.body || fallbackBody,
-  };
+  return buildCmsMetadata({ page, fallbackTitle: "Notre mission — MOONY Africa", fallbackDescription: fallbackBody, path: "/notre-mission" });
 }
 
 export default async function MissionPage() {
