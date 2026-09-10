@@ -20,12 +20,19 @@ body {
   background: var(--moony-ivory);
   color: var(--moony-espresso);
   font-family: Arial, Helvetica, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; }
+summary::-webkit-details-marker { display: none; }
 ::selection { background: var(--moony-peach); color: var(--moony-espresso); }
 
-.moony-serif { font-family: Georgia, "Times New Roman", serif; }
+.moony-serif {
+  font-family: "Bodoni 72", Didot, "Didot LT STD", "Baskerville", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+}
+.moony-logo-type { letter-spacing: -0.075em; }
 .moony-paper {
   background-color: var(--moony-ivory);
   background-image:
@@ -38,30 +45,85 @@ button, input, textarea, select { font: inherit; }
   pointer-events: none;
   position: absolute;
   inset: 0;
-  opacity: .08;
+  opacity: .065;
   z-index: 2;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
   mix-blend-mode: multiply;
 }
+
 .hero-photo {
-  background-color: #b97950;
+  background-color: #c07d56;
+  background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
 }
-.hero-home { background-image: linear-gradient(90deg, rgba(55,25,15,.72) 0%, rgba(55,25,15,.25) 38%, rgba(55,25,15,.04) 62%), url('/images/home-hero.webp'); }
-.hero-mission { background-image: linear-gradient(90deg, rgba(255,248,240,.98) 0%, rgba(255,248,240,.88) 33%, rgba(255,248,240,.20) 62%), url('/images/mission-hero.webp'); }
-.hero-approach { background-image: linear-gradient(90deg, rgba(255,248,240,.98) 0%, rgba(255,248,240,.86) 34%, rgba(255,248,240,.18) 61%), url('/images/approach-hero.webp'); }
-.hero-about { background-image: linear-gradient(90deg, rgba(255,248,240,.98) 0%, rgba(255,248,240,.86) 35%, rgba(255,248,240,.18) 64%), url('/images/about-hero.webp'); }
-.hero-community { background-image: linear-gradient(90deg, rgba(255,248,240,.98) 0%, rgba(255,248,240,.82) 34%, rgba(255,248,240,.13) 60%), url('/images/community-hero.webp'); }
+
+.hero-home {
+  background-image:
+    linear-gradient(90deg, rgba(53, 22, 13, .82) 0%, rgba(67, 27, 16, .69) 28%, rgba(71, 31, 19, .22) 54%, rgba(71, 31, 19, .03) 76%),
+    radial-gradient(circle at 78% 26%, rgba(236, 181, 126, .28), transparent 28%),
+    linear-gradient(115deg, #70412e 0%, #b97850 55%, #d7ab84 100%),
+    url('/images/home-hero.webp');
+  background-blend-mode: normal, screen, normal, normal;
+}
+.hero-mission {
+  background-image:
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.96) 31%, rgba(255,248,240,.72) 43%, rgba(255,248,240,.12) 65%),
+    linear-gradient(110deg, #f6eadb 0%, #ddaa82 64%, #96593c 100%),
+    url('/images/mission-hero.webp');
+}
+.hero-approach {
+  background-image:
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.69) 44%, rgba(255,248,240,.12) 65%),
+    linear-gradient(110deg, #f6eadb 0%, #d29b73 60%, #76503d 100%),
+    url('/images/approach-hero.webp');
+}
+.hero-about {
+  background-image:
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 32%, rgba(255,248,240,.70) 45%, rgba(255,248,240,.13) 65%),
+    linear-gradient(110deg, #f7ebdc 0%, #d5a17c 62%, #86533c 100%),
+    url('/images/about-hero.webp');
+}
+.hero-community {
+  background-image:
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.67) 43%, rgba(255,248,240,.10) 64%),
+    linear-gradient(110deg, #f7ebdc 0%, #d19b72 60%, #7f4e37 100%),
+    url('/images/community-hero.webp');
+}
 
 .admin-shadow { box-shadow: 0 10px 30px rgba(70, 36, 24, .05); }
-.admin-card { border: 1px solid rgba(91,47,34,.11); background: rgba(255,255,255,.84); border-radius: 14px; }
-.admin-grid { background-image: linear-gradient(rgba(91,47,34,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(91,47,34,.045) 1px, transparent 1px); background-size: 52px 52px; }
+.admin-card {
+  border: 1px solid rgba(91,47,34,.11);
+  background: rgba(255,255,255,.84);
+  border-radius: 14px;
+}
+.admin-grid {
+  background-image:
+    linear-gradient(rgba(91,47,34,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,47,34,.045) 1px, transparent 1px);
+  background-size: 52px 52px;
+}
 
-@media (max-width: 1024px) {
+@media (max-width: 1199px) {
   .hero-home,
   .hero-mission,
   .hero-approach,
   .hero-about,
-  .hero-community { background-position: 58% center; }
+  .hero-community { background-position: 60% center; }
+}
+
+@media (max-width: 767px) {
+  .hero-photo { background-position: 66% center; }
+  .hero-home {
+    background-image:
+      linear-gradient(90deg, rgba(48,20,13,.88) 0%, rgba(55,22,14,.75) 58%, rgba(55,22,14,.42) 100%),
+      linear-gradient(120deg, #71412d 0%, #b8774f 55%, #d7ab84 100%),
+      url('/images/home-hero.webp');
+  }
+  .hero-mission,
+  .hero-approach,
+  .hero-about,
+  .hero-community {
+    background-position: 72% center;
+  }
 }
