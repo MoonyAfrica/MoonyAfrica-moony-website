@@ -1,121 +1,28 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
 
-const kpis = [
-  ["Visites du site", "28 456", "+12%"],
-  ["Clics téléchargement", "4 892", "+18%"],
-  ["Leads générés", "1 204", "+22%"],
-  ["RDV pris", "186", "+14%"],
-  ["Taux de conversion", "4,2%", "+0,8 pt"],
-];
+type Status="new"|"to_contact"|"contacted"|"appointment"|"proposal"|"negotiation"|"won"|"lost";
+type Lead={id:string;first_name:string;last_name:string;email:string;company:string|null;status:Status;deal_value:number|null;country:string|null;need:string;assigned_to:string|null};
+type Dashboard={metrics:{pageViews:number;appClicks:number;leads30d:number;appointments30d:number;conversionRate:number};daily:{date:string;views:number}[];countries:{name:string;value:number}[];leads:Lead[];upcomingAppointments:{id:string;starts_at:string|null;status:string;provider:string|null;notes:string|null}[];tickets:{id:string;requester_name:string|null;requester_email:string;type:string;subject:string;priority:string;status:string}[];campaigns:{id:string;name:string;subject:string;status:string;stats:Record<string,unknown>}[];partners:{id:string;name:string;status:string;featured:boolean}[];testimonials:{id:string;author_name:string;status:string;featured:boolean}[]};
+const empty:Dashboard={metrics:{pageViews:0,appClicks:0,leads30d:0,appointments30d:0,conversionRate:0},daily:[],countries:[],leads:[],upcomingAppointments:[],tickets:[],campaigns:[],partners:[],testimonials:[]};
+const stages:[Status,string][]=[["new","Nouveau"],["to_contact","À contacter"],["contacted","Contacté"],["appointment","RDV planifié"],["proposal","Proposition envoyée"],["negotiation","Négociation"],["won","Signé"],["lost","Perdu"]];
+function money(value:number){return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(value)}
 
-const pipeline = [
-  { name: "Nouveau", total: "32 000 €", tone: "bg-[#f7eee8]", leads: [["Soleil Maternité", "Sénégal"], ["Teranga Santé", "Côte d’Ivoire"], ["Wellness Africa", "Maroc"]] },
-  { name: "À contacter", total: "48 000 €", tone: "bg-[#f7eee8]", leads: [["MamaCare", "France"], ["Bloom Women", "Belgique"], ["Santé & Elles", "Cameroun"]] },
-  { name: "Contacté", total: "62 000 €", tone: "bg-[#f8efe6]", leads: [["Afrik Santé", "Tunisie"], ["Femina Plus", "Sénégal"], ["Care for Her", "Rwanda"]] },
-  { name: "RDV planifié", total: "36 000 €", tone: "bg-[#fbf0dd]", leads: [["Hope Clinic", "Côte d’Ivoire"], ["Women First", "France"]] },
-  { name: "Proposition envoyée", total: "28 000 €", tone: "bg-[#fbf0dd]", leads: [["Santé Femme", "Maroc"], ["Nabou Health", "Sénégal"]] },
-  { name: "Négociation", total: "22 000 €", tone: "bg-[#f7e8cc]", leads: [["Wellness Africa", "Maroc"], ["Women First", "France"]] },
-  { name: "Gagné / Signé", total: "104 000 €", tone: "bg-[#e4f3e8]", leads: [["Maison de la Femme", "Côte d’Ivoire"], ["Afrique en Santé", "Sénégal"]] },
-  { name: "Perdu", total: "14 000 €", tone: "bg-[#f8e4e2]", leads: [["Santé Plus", "Algérie"], ["WellBeing Co", "Canada"]] },
-];
-
-const recentRequests = [
-  ["Awa Diop", "Partenariat", "Sénégal", "Nouveau"],
-  ["Marie Koffi", "Demande d’info", "Côte d’Ivoire", "Traité"],
-  ["Fatou Bâ", "Rendez-vous", "France", "RDV planifié"],
-  ["Claire Dubois", "Partenariat", "Belgique", "Nouveau"],
-];
-
-const reminders = [
-  ["31 mai", "RDV avec Dr. Kouassi", "Clinique Sainte-Marie"],
-  ["31 mai", "Relance proposition", "Teranga Santé"],
-  ["1 juin", "Appel découverte", "MamaCare"],
-  ["2 juin", "Préparer présentation", "Women First"],
-];
-
-export default function AdminDashboard() {
-  return (
-    <AdminShell active="Dashboard">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="moony-serif text-4xl tracking-[-.035em] text-[#5b2f22]">Bonjour Aïssata ☀</h1>
-          <p className="mt-1 text-sm text-[#5b2f22]/50">Voici un aperçu des performances de MOONY. Tout est réuni pour faire rayonner notre mission.</p>
-        </div>
-        <div className="flex gap-3">
-          <button className="rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm">1 mai 2024 – 31 mai 2024</button>
-          <button className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm font-medium text-white">+ Créer</button>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {kpis.map(([label, value, delta]) => (
-          <article key={label} className="admin-card admin-shadow p-5">
-            <p className="text-xs text-[#5b2f22]/52">{label}</p>
-            <div className="mt-3 flex items-end justify-between gap-2">
-              <strong className="moony-serif text-3xl font-normal">{value}</strong>
-              <span className="text-xs font-semibold text-emerald-700">↗ {delta}</span>
-            </div>
-            <p className="mt-1 text-[10px] text-[#5b2f22]/36">vs mois précédent</p>
-          </article>
-        ))}
-      </div>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_.75fr]">
-        <article className="admin-card admin-shadow p-5">
-          <div className="flex items-center justify-between">
-            <div><h2 className="moony-serif text-2xl">Performance du site</h2><p className="text-xs text-[#5b2f22]/45">Visites et leads</p></div>
-            <button className="rounded-md border border-[#5b2f22]/10 px-3 py-2 text-xs">30 derniers jours</button>
-          </div>
-          <div className="mt-5 h-64 rounded-lg border border-[#5b2f22]/8 bg-[#fffdf9] p-4">
-            <svg viewBox="0 0 800 250" className="h-full w-full" role="img" aria-label="Courbe de visites du site">
-              {[40,80,120,160,200].map(y => <line key={y} x1="0" x2="800" y1={y} y2={y} stroke="#eadfd8" strokeWidth="1" />)}
-              <polyline fill="none" stroke="#8a3d20" strokeWidth="4" points="0,210 70,188 130,170 190,166 245,138 305,155 360,122 420,105 475,130 530,115 590,133 650,96 710,72 800,42" />
-              <polyline fill="none" stroke="#e4b19c" strokeWidth="3" points="0,225 70,214 130,210 190,205 245,200 305,198 360,185 420,175 475,183 530,170 590,176 650,160 710,150 800,138" />
-            </svg>
-          </div>
-        </article>
-
-        <article className="admin-card admin-shadow p-5">
-          <div className="flex items-center justify-between"><h2 className="moony-serif text-2xl">Audience par pays</h2><button className="text-xs text-[#8d3b19]">Voir tout</button></div>
-          <div className="mt-5 rounded-xl bg-[#f7eee8] p-5"><div className="mx-auto grid h-40 place-items-center rounded-[45%] border border-[#5b2f22]/10 text-center text-xs text-[#5b2f22]/55">Carte de l’audience<br />agrégée</div></div>
-          <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">{[["Côte d’Ivoire","28%"],["France","18%"],["Sénégal","12%"],["États-Unis","8%"],["Cameroun","7%"],["Canada","6%"]].map(([c,v]) => <div key={c} className="flex justify-between border-b border-[#5b2f22]/8 py-1.5"><span>{c}</span><strong>{v}</strong></div>)}</div>
-        </article>
-      </div>
-
-      <article className="admin-card admin-shadow mt-4 p-4">
-        <div className="mb-3 flex items-center justify-between"><h2 className="moony-serif text-2xl">Pipeline commercial</h2><button className="text-xs text-[#8d3b19]">Voir tous les leads</button></div>
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {pipeline.map(col => (
-            <div key={col.name} className={`${col.tone} min-w-[190px] flex-1 rounded-xl p-3`}>
-              <div className="mb-3"><p className="text-xs font-semibold">{col.name}</p><strong className="moony-serif text-xl font-normal">{col.total}</strong></div>
-              <div className="space-y-2">{col.leads.map(([lead, country]) => <div key={lead} className="rounded-lg bg-white px-3 py-2 text-[11px] shadow-sm"><strong className="block">{lead}</strong><span className="text-[#5b2f22]/45">{country}</span></div>)}</div>
-              <button className="mt-3 w-full text-center text-[11px] text-[#5b2f22]/55">+ Ajouter un lead</button>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1fr]">
-        <article className="admin-card admin-shadow p-4">
-          <div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Demandes récentes</h3><button className="text-[10px] text-[#8d3b19]">Voir toutes</button></div>
-          <div className="mt-3 space-y-1">{recentRequests.map(([name, type, country, status]) => <div key={name} className="grid grid-cols-[1.1fr_1fr_.8fr_auto] gap-2 border-b border-[#5b2f22]/8 py-2 text-[10px]"><strong>{name}</strong><span>{type}</span><span className="text-[#5b2f22]/50">{country}</span><span className="rounded-full bg-[#f4e6dd] px-2 py-1">{status}</span></div>)}</div>
-        </article>
-
-        <article className="admin-card admin-shadow p-4">
-          <div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Campagnes & newsletter</h3><button className="text-[10px] text-[#8d3b19]">Voir toutes</button></div>
-          <div className="mt-4 rounded-xl bg-[#f7eee8] p-4"><p className="text-[10px] uppercase tracking-[.16em] text-[#9a5837]">Newsletter</p><h4 className="moony-serif mt-1 text-lg">Santé des femmes : ensemble pour demain</h4><div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px]"><div><strong className="block text-base">12 480</strong>destinataires</div><div><strong className="block text-base">28,4%</strong>ouvertures</div><div><strong className="block text-base">4,1%</strong>clics</div></div></div>
-        </article>
-
-        <article className="admin-card admin-shadow p-4">
-          <div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Rappels commerciaux</h3><button className="text-[10px] text-[#8d3b19]">Voir tous</button></div>
-          <div className="mt-3 space-y-2">{reminders.map(([date, title, company]) => <div key={`${date}-${title}`} className="flex gap-3 border-b border-[#5b2f22]/8 pb-2 text-[10px]"><span className="w-12 rounded-md bg-[#f4e6dd] px-2 py-1 text-center font-semibold">{date}</span><div><strong className="block">{title}</strong><span className="text-[#5b2f22]/45">{company}</span></div></div>)}</div>
-        </article>
-
-        <article className="admin-card admin-shadow p-4">
-          <div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Partenaires & témoignages</h3><button className="text-[10px] text-[#8d3b19]">Voir tout</button></div>
-          <div className="mt-3 space-y-2">{[["Fondation Awa","Publié"],["Santé & Elles","Publié"],["MamaCare","En attente"],["Afrique en Santé","Publié"]].map(([name,status]) => <div key={name} className="flex items-center justify-between border-b border-[#5b2f22]/8 pb-2 text-[10px]"><strong>{name}</strong><span className={`rounded-full px-2 py-1 ${status === "Publié" ? "bg-[#e4f3e8] text-emerald-800" : "bg-[#fbf0dd]"}`}>{status}</span></div>)}</div>
-        </article>
-      </div>
-    </AdminShell>
-  );
+export default function AdminDashboard(){
+ const [data,setData]=useState<Dashboard>(empty);const [loading,setLoading]=useState(true);
+ useEffect(()=>{void (async()=>{const r=await fetch("/api/admin/dashboard",{cache:"no-store"});if(r.status===401){location.href="/admin/login";return;}const d=await r.json();if(r.ok)setData(d);setLoading(false)})()},[]);
+ const points=useMemo(()=>{if(!data.daily.length)return"";const max=Math.max(1,...data.daily.map(x=>x.views));return data.daily.map((x,i)=>`${(i/Math.max(1,data.daily.length-1))*800},${225-(x.views/max)*185}`).join(" ")},[data.daily]);
+ const countryTotal=data.countries.reduce((s,x)=>s+x.value,0);
+ return <AdminShell active="Dashboard"><div className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="moony-serif text-4xl tracking-[-.035em] text-[#5b2f22]">Bonjour Aïssata ☀</h1><p className="mt-1 text-sm text-[#5b2f22]/50">Voici ce qui se passe réellement sur le site et dans votre activité commerciale.</p></div><div className="flex gap-2"><Link href="/admin/analytics" className="rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm">Voir l’analytique</Link><Link href="/admin/crm" className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm font-medium text-white">+ Ajouter un lead</Link></div></div>
+ <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">{[["Pages vues",data.metrics.pageViews],["Clics application",data.metrics.appClicks],["Leads générés",data.metrics.leads30d],["RDV créés",data.metrics.appointments30d],["Taux de conversion",`${data.metrics.conversionRate}%`]].map(([label,value])=><article key={String(label)} className="admin-card admin-shadow p-5"><p className="text-xs text-[#5b2f22]/52">{label}</p><strong className="moony-serif mt-3 block text-3xl font-normal">{loading?"…":value}</strong><p className="mt-1 text-[10px] text-[#5b2f22]/36">30 derniers jours</p></article>)}</div>
+ <div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_.75fr]"><article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Performance du site</h2><p className="text-xs text-[#5b2f22]/45">Pages vues · 30 jours</p></div><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir les détails →</Link></div><div className="mt-5 h-64 rounded-lg border border-[#5b2f22]/8 bg-[#fffdf9] p-4"><svg viewBox="0 0 800 250" className="h-full w-full" preserveAspectRatio="none">{[40,80,120,160,200].map(y=><line key={y} x1="0" x2="800" y1={y} y2={y} stroke="#eadfd8"/><polyline key={`p${y}`} fill="none" points=""/>)}<polyline fill="none" stroke="#8a3d20" strokeWidth="4" vectorEffect="non-scaling-stroke" points={points}/></svg></div></article><article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><h2 className="moony-serif text-2xl">Audience par pays</h2><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir tout</Link></div><div className="mt-5 space-y-3">{data.countries.length?data.countries.map(item=><div key={item.name}><div className="flex justify-between text-xs"><span>{item.name}</span><strong>{countryTotal?Math.round(item.value/countryTotal*100):0}%</strong></div><div className="mt-1 h-2 rounded-full bg-[#f2e6de]"><div className="h-2 rounded-full bg-[#9d4c27]" style={{width:`${countryTotal?item.value/countryTotal*100:0}%`}}/></div></div>):<p className="py-12 text-center text-xs text-[#5b2f22]/42">Les pays apparaîtront dès que des visites seront enregistrées.</p>}</div></article></div>
+ <article className="admin-card admin-shadow mt-4 p-4"><div className="mb-3 flex items-center justify-between"><h2 className="moony-serif text-2xl">Pipeline commercial</h2><Link href="/admin/crm" className="text-xs text-[#8d3b19]">Ouvrir le CRM →</Link></div><div className="flex gap-2 overflow-x-auto pb-2">{stages.map(([status,label],index)=>{const rows=data.leads.filter(x=>x.status===status);const total=rows.reduce((s,x)=>s+Number(x.deal_value||0),0);return <div key={status} className={`min-w-[180px] flex-1 rounded-xl p-3 ${index===6?"bg-[#e4f3e8]":index===7?"bg-[#f8e4e2]":index>=3?"bg-[#fbf0dd]":"bg-[#f7eee8]"}`}><p className="text-xs font-semibold">{label} <span className="font-normal text-[#5b2f22]/40">({rows.length})</span></p><strong className="moony-serif mt-1 block text-xl font-normal">{money(total)}</strong><div className="mt-3 space-y-2">{rows.slice(0,3).map(lead=><Link href="/admin/crm" key={lead.id} className="block rounded-lg bg-white px-3 py-2 text-[11px] shadow-sm"><strong className="block truncate">{lead.company||`${lead.first_name} ${lead.last_name}`}</strong><span className="text-[#5b2f22]/45">{lead.country||"Pays non renseigné"}</span></Link>)}</div></div>})}</div></article>
+ <div className="mt-4 grid gap-4 xl:grid-cols-4"><article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Prochains rendez-vous</h3><Link href="/admin/rendez-vous" className="text-[10px] text-[#8d3b19]">Voir tous</Link></div><div className="mt-3 space-y-2">{data.upcomingAppointments.length?data.upcomingAppointments.slice(0,4).map(x=><div key={x.id} className="border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block">{x.starts_at?new Intl.DateTimeFormat("fr-FR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(x.starts_at)):"Date à préciser"}</strong><span className="text-[#5b2f22]/45">{x.provider||x.notes||"Rendez-vous commercial"}</span></div>):<p className="py-6 text-xs text-[#5b2f22]/40">Aucun rendez-vous à venir.</p>}</div></article>
+ <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Service client</h3><Link href="/admin/service-client" className="text-[10px] text-[#8d3b19]">Ouvrir</Link></div><div className="mt-3 space-y-2">{data.tickets.slice(0,4).map(x=><Link href="/admin/service-client" key={x.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block truncate">{x.subject}</strong><span className="text-[#5b2f22]/45">{x.requester_name||x.requester_email} · {x.status}</span></Link>)}</div></article>
+ <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Newsletters</h3><Link href="/admin/newsletters" className="text-[10px] text-[#8d3b19]">Voir toutes</Link></div><div className="mt-3 space-y-2">{data.campaigns.slice(0,4).map(x=><Link href="/admin/newsletters" key={x.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block truncate">{x.name}</strong><span className="text-[#5b2f22]/45">{x.status}</span></Link>)}{!data.campaigns.length?<p className="py-6 text-xs text-[#5b2f22]/40">Aucune campagne.</p>:null}</div></article>
+ <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Marque & confiance</h3><Link href="/admin/partenaires" className="text-[10px] text-[#8d3b19]">Gérer</Link></div><div className="mt-4 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.partners.filter(x=>x.status==="published").length}</strong><span className="text-[10px] text-[#5b2f22]/45">partenaires publiés</span></div><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.testimonials.filter(x=>x.status==="approved").length}</strong><span className="text-[10px] text-[#5b2f22]/45">avis approuvés</span></div></div><Link href="/avis" target="_blank" className="mt-3 block text-center text-[10px] text-[#8d3b19]">Ouvrir le formulaire d’avis ↗</Link></article></div>
+ </AdminShell>;
 }
