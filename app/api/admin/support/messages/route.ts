@@ -1,19 +1,19 @@
 import { NextResponse } from "next/server";
-import { asText, requireAdmin } from "@/lib/admin-api";
+import { asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char] ?? char));
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "support.write");
   if (error || !supabase) return error;
 
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "Requête invalide." }, { status: 400 }); }
   const ticketId = asText(body.ticketId, 80);
   const reply = asText(body.message, 5000);
-  const senderName = asText(body.senderName, 180) || "Équipe MOONY";
+  const senderName = session?.name || asText(body.senderName, 180) || "Équipe MOONY";
   if (!ticketId || !reply) return NextResponse.json({ error: "Ticket et réponse obligatoires." }, { status: 422 });
 
   const { data: ticket, error: ticketError } = await supabase.from("support_tickets").select("id,requester_name,requester_email,subject").eq("id", ticketId).single();
@@ -42,5 +42,6 @@ export async function POST(request: Request) {
     delivered = emailResponse.ok;
   }
 
+  await writeAuditLog(supabase, session, "support.reply_sent", "support_ticket", ticketId, `Réponse envoyée sur « ${ticket.subject} »`, { messageId: message.id, delivered });
   return NextResponse.json({ message, delivered });
 }
