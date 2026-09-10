@@ -8,7 +8,7 @@ import { PublicHeader } from "@/components/public-header";
 import { getPublishedPage } from "@/lib/cms";
 import { buildCmsMetadata } from "@/lib/seo";
 
-function pathOf(slug:string[]){return `/${slug.map(part=>encodeURIComponent(decodeURIComponent(part))).join("/")}`;}
+function pathOf(slug:string[]){return `/${slug.join("/")}`;}
 function safeBackgroundUrl(value:string){return value.replace(/["'\n\r()]/g,"");}
 
 export async function generateMetadata({params}:{params:Promise<{slug:string[]}>}):Promise<Metadata>{
