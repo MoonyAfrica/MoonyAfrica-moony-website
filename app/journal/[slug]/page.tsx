@@ -4,11 +4,36 @@ import { notFound } from "next/navigation";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
 import { getArticleBySlug } from "@/lib/public-content";
+import { getPublicSiteSettings } from "@/lib/public-settings";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params; const article = await getArticleBySlug(slug);
-  if (!article) return { title: "Article | MOONY Africa" };
-  return { title: article.seo_title || `${article.title} | MOONY Africa`, description: article.seo_description || article.excerpt || undefined };
+  const { slug } = await params;
+  const [article, settings] = await Promise.all([getArticleBySlug(slug), getPublicSiteSettings()]);
+  if (!article) return { title: "Article | MOONY Africa", robots: { index: false, follow: false } };
+  const title = article.seo_title || `${article.title} | MOONY Africa`;
+  const description = article.seo_description || article.excerpt || settings.seo.defaultDescription;
+  const image = article.image_url || settings.seo.defaultOgImage || undefined;
+  const path = `/journal/${article.slug}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: {
+      type: "article",
+      title,
+      description,
+      url: path,
+      images: image ? [image] : undefined,
+      publishedTime: article.published_at || undefined,
+      authors: [article.author_name],
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title,
+      description,
+      images: image ? [image] : undefined,
+    },
+  };
 }
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
