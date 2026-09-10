@@ -25,6 +25,7 @@ function matchesPlacement(item: MarketingElement, pathname: string) {
 
 export function MarketingLayer() {
   const pathname = usePathname();
+  const disabled = pathname.startsWith("/admin");
   const [elements, setElements] = useState<MarketingElement[]>([]);
   const [popupReady, setPopupReady] = useState(false);
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -32,6 +33,7 @@ export function MarketingLayer() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (disabled) return;
     let cancelled = false;
     fetch("/api/marketing", { cache: "no-store" })
       .then((response) => response.json())
@@ -43,7 +45,7 @@ export function MarketingLayer() {
       try { setDismissed(JSON.parse(hidden)); } catch { /* ignore */ }
     }
     return () => { cancelled = true; window.clearTimeout(timer); };
-  }, []);
+  }, [disabled]);
 
   const visible = useMemo(() => elements.filter((item) => matchesPlacement(item, pathname) && !dismissed.includes(item.id)), [elements, pathname, dismissed]);
   const banner = visible.find((item) => item.kind === "banner");
@@ -71,6 +73,8 @@ export function MarketingLayer() {
     setMessage("Merci, votre inscription est confirmée.");
     setEmail("");
   }
+
+  if (disabled) return null;
 
   return (
     <>
