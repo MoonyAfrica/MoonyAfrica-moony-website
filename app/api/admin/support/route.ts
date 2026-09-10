@@ -13,7 +13,7 @@ async function parseBody(request: Request) {
 async function runUrgentAutomation(supabase: NonNullable<ReturnType<typeof requireAdmin>["supabase"]>, ticket: Record<string, unknown>) {
   try {
     await triggerAutomationEvent(supabase, "urgent_ticket", "support_ticket", String(ticket.id), {
-      ticket_id: ticket.id,
+      ticket_id: String(ticket.id),
       subject: ticket.subject,
       requester: ticket.requester_name || ticket.requester_email,
       priority: ticket.priority,
