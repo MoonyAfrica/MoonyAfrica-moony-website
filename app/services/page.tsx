@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { BriefcaseBusiness, Building2, CalendarDays, Check, HeartPulse, LockKeyhole, MessageCircle, Stethoscope, Users } from "lucide-react";
+import { CmsSections } from "@/components/cms-sections";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
 import { getPublishedPage } from "@/lib/cms";
@@ -125,6 +126,7 @@ export default async function ServicesPage() {
         </div>
       </section>
 
+      <CmsSections sections={page?.sections ?? []} />
       <PublicFooter />
     </main>
   );
