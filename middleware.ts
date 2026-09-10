@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const COOKIE = "moony_control_center";
+const PUBLIC_ADMIN_PATHS = [
+  "/admin/login",
+  "/admin/acces-refuse",
+  "/admin/mot-de-passe-oublie",
+  "/admin/reinitialiser-mot-de-passe",
+];
 
 type EdgeSession = {
   sub?: string;
@@ -19,6 +25,16 @@ function decodeBase64Url(value: string) {
 function decodePayload(value: string) {
   const bytes = decodeBase64Url(value);
   return new TextDecoder().decode(bytes);
+}
+
+function secure(response: NextResponse) {
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  response.headers.set("X-Frame-Options", "DENY");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "same-origin");
+  response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  response.headers.set("Content-Security-Policy", "frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
+  return response;
 }
 
 async function verifySession(token: string): Promise<EdgeSession | null> {
@@ -75,7 +91,9 @@ function hasAnyPermission(session: EdgeSession, permissions: string[] | null) {
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  if (pathname === "/admin/login" || pathname.startsWith("/admin/acces-refuse")) return NextResponse.next();
+  if (PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) {
+    return secure(NextResponse.next());
+  }
 
   const token = request.cookies.get(COOKIE)?.value ?? "";
   const session = token ? await verifySession(token) : null;
@@ -86,7 +104,7 @@ export async function middleware(request: NextRequest) {
     url.searchParams.set("returnTo", `${pathname}${request.nextUrl.search}`);
     const response = NextResponse.redirect(url);
     if (token) response.cookies.delete(COOKIE);
-    return response;
+    return secure(response);
   }
 
   if (!hasAnyPermission(session, requiredPermissions(pathname))) {
@@ -94,10 +112,10 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/admin/acces-refuse";
     url.search = "";
     url.searchParams.set("from", pathname);
-    return NextResponse.redirect(url);
+    return secure(NextResponse.redirect(url));
   }
 
-  return NextResponse.next();
+  return secure(NextResponse.next());
 }
 
 export const config = {
