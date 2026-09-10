@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Instagram, Linkedin, Mail, ShieldCheck } from "lucide-react";
 import { MoonyLogo } from "./moony-logo";
+import { PublicProofStrip } from "./public-proof-strip";
 import { siteConfig } from "@/lib/site-config";
 
 const columns = [
@@ -39,6 +40,7 @@ const columns = [
 export function PublicFooter() {
   return (
     <footer className="border-t border-[#f5d8c8]/10 bg-[#321b14] text-[#fff8f1]">
+      <PublicProofStrip />
       <div className="mx-auto max-w-[1660px] px-6 py-14 sm:px-8 lg:px-12 lg:py-16">
         <div className="grid gap-12 lg:grid-cols-[1.2fr_1fr]">
           <div className="max-w-[520px]">
