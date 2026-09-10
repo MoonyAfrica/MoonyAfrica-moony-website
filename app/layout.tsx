@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AnalyticsTracker } from "@/components/analytics-tracker";
 import { MarketingLayer } from "@/components/marketing-layer";
 import "./globals.css";
 
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         {children}
         <MarketingLayer />
+        <AnalyticsTracker />
       </body>
     </html>
   );
