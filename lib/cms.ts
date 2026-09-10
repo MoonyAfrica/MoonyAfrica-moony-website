@@ -9,6 +9,9 @@ export type CmsHero = {
   primaryHref?: string;
   secondaryLabel?: string;
   secondaryHref?: string;
+  imageUrl?: string;
+  imageAlt?: string;
+  imagePosition?: string;
 };
 
 export type PublishedPage = {
