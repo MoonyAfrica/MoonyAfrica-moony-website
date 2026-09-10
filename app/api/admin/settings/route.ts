@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { requireAdmin } from "@/lib/admin-api";
 
 const knownKeys = ["general","integrations","privacy","branding"] as const;
 
@@ -28,16 +28,4 @@ export async function PATCH(request: Request) {
   const { error: upsertError } = await supabase.from("website_settings").upsert(rows, { onConflict: "key" });
   if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
   return NextResponse.json({ ok: true, updatedAt: current });
-}
-
-export function sanitizeGeneralSettings(input: unknown) {
-  const value = typeof input === "object" && input ? input as Record<string, unknown> : {};
-  return {
-    siteName: asText(value.siteName, 180) || "MOONY Africa",
-    email: asText(value.email, 240),
-    phone: asNullableText(value.phone, 80),
-    whatsapp: asNullableText(value.whatsapp, 120),
-    publicUrl: asText(value.publicUrl, 500),
-    appUrl: asText(value.appUrl, 500),
-  };
 }
