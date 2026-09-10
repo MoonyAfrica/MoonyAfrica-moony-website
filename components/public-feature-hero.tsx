@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookOpen, HeartHandshake, Sprout } from "lucide-react";
+import { PublicFooter } from "./public-footer";
 import { PublicHeader } from "./public-header";
 
 type Feature = { title: string; body: string; icon?: string };
@@ -86,6 +87,7 @@ export function PublicFeatureHero({
           </div>
         </div>
       </section>
+      <PublicFooter />
     </main>
   );
 }
