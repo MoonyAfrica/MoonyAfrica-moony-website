@@ -49,16 +49,18 @@ export async function POST(request: Request) {
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   await logActivity(supabase, data.id, "Lead créé", `Source : ${data.source || "Control Center"}`, session);
   await writeAuditLog(supabase, session, "crm.lead_created", "lead", data.id, `${firstName} ${lastName} ajouté au CRM`, { status, need, company: data.company ?? null });
-  void triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
-    lead_id: data.id,
-    lead: data.company || `${data.first_name} ${data.last_name}`,
-    first_name: data.first_name,
-    last_name: data.last_name,
-    company: data.company,
-    email: data.email,
-    status: data.status,
-    assigned_to: data.assigned_to,
-  }).catch(() => undefined);
+  try {
+    await triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
+      lead_id: data.id,
+      lead: data.company || `${data.first_name} ${data.last_name}`,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      company: data.company,
+      email: data.email,
+      status: data.status,
+      assigned_to: data.assigned_to,
+    });
+  } catch {}
   return NextResponse.json({ lead:data }, { status:201 });
 }
 
