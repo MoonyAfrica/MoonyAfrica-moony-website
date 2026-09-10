@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
+import { getPublishedPage } from "@/lib/cms";
 import { siteConfig } from "@/lib/site-config";
 import { getPublishedArticles, getPublishedResources } from "@/lib/public-content";
 
@@ -10,9 +12,16 @@ const fallbackFeatured = [
   { slug:"post-partum", category: "GROSSESSE", title: "Préparer son post-partum en toute sérénité", excerpt: "Anticiper, s’informer et se faire entourer pour vivre cette nouvelle étape plus sereinement.", image_url:null },
   { slug:"sororite", category: "COMMUNAUTÉ", title: "Le pouvoir de la sororité", excerpt: "Témoignages, entraide et défis communs : quand les femmes se soutiennent, tout devient possible.", image_url:null },
 ];
+const fallbackHero={eyebrow:"Ressources",title:"S’informer\npour mieux avancer",body:"Des contenus fiables, accessibles et utiles pour toutes les femmes, à chaque étape de leur vie."};
+
+export async function generateMetadata():Promise<Metadata>{
+  const page=await getPublishedPage("/ressources");
+  return {title:page?.seo_title||"Ressources — MOONY Africa",description:page?.seo_description||page?.hero?.body||fallbackHero.body};
+}
 
 export default async function ResourcesPage() {
-  const [articles, resources] = await Promise.all([getPublishedArticles(18), getPublishedResources(18)]);
+  const [page, articles, resources] = await Promise.all([getPublishedPage("/ressources"),getPublishedArticles(18), getPublishedResources(18)]);
+  const hero=page?.hero??{};
   const featured = articles.filter((x) => x.featured).slice(0,3);
   const heroCards = featured.length ? featured : fallbackFeatured;
   const latestArticles = articles.filter((x) => !featured.some((f) => f.slug === x.slug)).slice(0,6);
@@ -25,7 +34,7 @@ export default async function ResourcesPage() {
       <PublicHeader active="Ressources" />
       <section className="relative overflow-hidden border-b border-[#5b2f22]/10 bg-[linear-gradient(105deg,#f8efe5_0%,#ead9ca_100%)] pt-36">
         <div className="mx-auto grid max-w-[1500px] gap-10 px-6 pb-10 lg:grid-cols-[1.1fr_.9fr] lg:px-12">
-          <div><p className="text-xs font-semibold uppercase tracking-[.36em]">Ressources</p><h1 className="moony-serif mt-4 text-6xl leading-[.98] tracking-[-.045em] lg:text-7xl">S’informer<br />pour mieux avancer</h1><p className="mt-5 max-w-[620px] text-[18px] leading-7 text-[#5b2f22]/75">Des contenus fiables, accessibles et utiles pour toutes les femmes, à chaque étape de leur vie.</p><p className="mt-12 text-xs uppercase tracking-[.35em] text-[#8d5b47]">Santé · Éducation · Bien-être · Éveil</p></div>
+          <div><p className="text-xs font-semibold uppercase tracking-[.36em]">{hero.eyebrow||fallbackHero.eyebrow}</p><h1 className="moony-serif mt-4 whitespace-pre-line text-6xl leading-[.98] tracking-[-.045em] lg:text-7xl">{hero.title||fallbackHero.title}</h1><p className="mt-5 max-w-[620px] text-[18px] leading-7 text-[#5b2f22]/75">{hero.body||fallbackHero.body}</p><p className="mt-12 text-xs uppercase tracking-[.35em] text-[#8d5b47]">Santé · Éducation · Bien-être · Éveil</p></div>
           <div className="hidden items-end justify-end lg:flex"><div className="w-[420px] space-y-1 text-center moony-serif text-xl text-[#5b2f22]/80">{["SAVOIR", "PRÉVENTION", "BIEN-ÊTRE", "DROITS", "ÉQUILIBRE"].map((x) => <div key={x} className="border border-[#5b2f22]/12 bg-[#f6eadf] px-8 py-3 shadow-sm">{x}</div>)}</div></div>
         </div>
       </section>
