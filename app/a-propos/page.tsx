@@ -1,16 +1,14 @@
 import type { Metadata } from "next";
 import { PublicFeatureHero } from "@/components/public-feature-hero";
 import { getPublishedPage, heroLines } from "@/lib/cms";
+import { buildCmsMetadata } from "@/lib/seo";
 
 const fallbackTitle = ["Une histoire de soin,", "de transmission", "et d’horizons."];
 const fallbackBody = "MOONY est née du désir d’offrir aux femmes un espace de santé plus proche, plus doux et plus enraciné dans leurs réalités. Pensée pour l’Afrique et ouverte sur le monde, la plateforme réunit information fiable, accompagnement, communauté et innovation à chaque étape de la vie.";
 
 export async function generateMetadata(): Promise<Metadata> {
   const page = await getPublishedPage("/a-propos");
-  return {
-    title: page?.seo_title || "À propos — MOONY Africa",
-    description: page?.seo_description || page?.hero?.body || fallbackBody,
-  };
+  return buildCmsMetadata({ page, fallbackTitle: "À propos — MOONY Africa", fallbackDescription: fallbackBody, path: "/a-propos" });
 }
 
 export default async function AboutPage() {
