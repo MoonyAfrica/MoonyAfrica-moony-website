@@ -1,4 +1,6 @@
+import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
+import { siteConfig } from "@/lib/site-config";
 
 const categories = ["Tous les contenus", "Santé féminine", "Grossesse & post-partum", "Santé mentale", "Nutrition & mode de vie", "Droits & société", "Vie pro & études", "Histoires de femmes"];
 const featured = [
@@ -48,7 +50,7 @@ export default function ResourcesPage() {
 
       <section className="border-y border-[#5b2f22]/10 bg-[#f7ebe2]">
         <div className="mx-auto grid max-w-[1500px] gap-8 px-6 py-12 lg:grid-cols-[1.1fr_.9fr] lg:px-12">
-          <div><p className="text-xs uppercase tracking-[.3em]">Encore plus de ressources dans l’application</p><h2 className="moony-serif mt-3 text-5xl leading-tight">Des contenus exclusifs,<br />rien que pour vous.</h2><p className="mt-4 max-w-xl text-[#5b2f22]/70">Webinaires, mini-cours, guides pratiques, témoignages vidéo… Découvrez encore plus de ressources directement dans MOONY.</p><a href="https://application.moony-africa.com" className="mt-7 inline-flex rounded-full bg-[#7e3518] px-7 py-3.5 text-sm font-medium text-white">Télécharger l’application</a></div>
+          <div><p className="text-xs uppercase tracking-[.3em]">Encore plus de ressources dans l’application</p><h2 className="moony-serif mt-3 text-5xl leading-tight">Des contenus exclusifs,<br />rien que pour vous.</h2><p className="mt-4 max-w-xl text-[#5b2f22]/70">Webinaires, mini-cours, guides pratiques, témoignages vidéo… Découvrez encore plus de ressources directement dans MOONY.</p><a href={siteConfig.appUrl} className="mt-7 inline-flex rounded-full bg-[#7e3518] px-7 py-3.5 text-sm font-medium text-white">Accéder à l’application</a></div>
           <div className="rounded-[34px] border border-[#5b2f22]/10 bg-white/65 p-8"><p className="moony-serif text-4xl italic">Apprendre<br />Comprendre<br />Évoluer<br />Ensemble</p></div>
         </div>
       </section>
@@ -57,6 +59,8 @@ export default function ResourcesPage() {
         <div><p className="text-xs uppercase tracking-[.3em]">Une question ?</p><h2 className="moony-serif mt-3 text-5xl">FAQ</h2></div>
         <div className="divide-y divide-[#5b2f22]/12 border-y border-[#5b2f22]/12">{["Les contenus sont-ils rédigés par des professionnelles de santé ?", "Les ressources sont-elles accessibles gratuitement ?", "Puis-je proposer un sujet ou un témoignage ?", "Les contenus sont-ils disponibles dans plusieurs langues ?"].map(q => <button key={q} className="flex w-full items-center justify-between py-5 text-left text-sm"><span>{q}</span><span>›</span></button>)}</div>
       </section>
+
+      <PublicFooter />
     </main>
   );
 }
