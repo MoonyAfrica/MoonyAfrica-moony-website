@@ -20,12 +20,17 @@ async function jsonBody(request: Request) {
 export async function GET(request: Request) {
   const { error, supabase } = requireAdmin(request);
   if (error || !supabase) return error;
+  const id = new URL(request.url).searchParams.get("id")?.trim() || "";
+  const fields = "id,title,slug,status,seo_title,seo_description,hero,sections,metadata,created_at,updated_at";
 
-  const { data, error: queryError } = await supabase
-    .from("website_pages")
-    .select("id,title,slug,status,seo_title,seo_description,hero,sections,updated_at")
-    .order("updated_at", { ascending: false });
+  if (id) {
+    const { data, error: queryError } = await supabase.from("website_pages").select(fields).eq("id", id).maybeSingle();
+    if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "Page introuvable." }, { status: 404 });
+    return NextResponse.json({ page: data });
+  }
 
+  const { data, error: queryError } = await supabase.from("website_pages").select(fields).order("updated_at", { ascending: false });
   if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
   return NextResponse.json({ pages: data ?? [] });
 }
@@ -51,6 +56,7 @@ export async function POST(request: Request) {
       seo_description: asNullableText(body.seoDescription, 360),
       hero: typeof body.hero === "object" && body.hero ? body.hero : {},
       sections: Array.isArray(body.sections) ? body.sections : [],
+      metadata: typeof body.metadata === "object" && body.metadata ? body.metadata : {},
       updated_at: new Date().toISOString(),
     })
     .select("*")
@@ -77,6 +83,7 @@ export async function PATCH(request: Request) {
   if ("seoDescription" in body) patch.seo_description = asNullableText(body.seoDescription, 360);
   if (typeof body.hero === "object" && body.hero) patch.hero = body.hero;
   if (Array.isArray(body.sections)) patch.sections = body.sections;
+  if (typeof body.metadata === "object" && body.metadata) patch.metadata = body.metadata;
 
   const { data, error: updateError } = await supabase.from("website_pages").update(patch).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
