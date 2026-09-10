@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { CSSProperties, Metadata } from "react";
 import { CalendarDays, Heart, Sprout, Users } from "lucide-react";
 import { CmsSections } from "@/components/cms-sections";
 import { PublicFooter } from "@/components/public-footer";
@@ -27,12 +27,18 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+function safeBackgroundUrl(value:string){return value.replace(/["'\n\r()]/g,"");}
+
 export default async function CommunityPage() {
   const page = await getPublishedPage("/communaute");
   const hero = page?.hero ?? {};
+  const heroStyle = hero.imageUrl ? ({
+    "--moony-page-hero-image": `url("${safeBackgroundUrl(hero.imageUrl)}")`,
+    "--moony-page-hero-position": hero.imagePosition || "65% center",
+  } as CSSProperties) : undefined;
   return (
     <main className="min-h-screen bg-[#fffaf4] text-[#5b2f22]">
-      <section className="hero-photo hero-community moony-grain relative min-h-[700px] overflow-hidden">
+      <section style={heroStyle} className="hero-photo hero-community moony-grain relative min-h-[700px] overflow-hidden">
         <PublicHeader active="Communauté" />
         <div className="relative z-10 mx-auto flex min-h-[700px] max-w-[1660px] items-center px-5 pb-10 pt-36 sm:px-8 lg:px-12">
           <div className="max-w-[610px]">
