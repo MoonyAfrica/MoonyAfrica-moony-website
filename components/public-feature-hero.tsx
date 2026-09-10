@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import Link from "next/link";
 import { BookOpen, HeartHandshake, Sprout } from "lucide-react";
 import { getPublishedPage, heroLines } from "@/lib/cms";
@@ -36,6 +37,10 @@ function CmsTitle({ active, value, fallback }: { active: string; value?: string;
   return <>{lines.map((line, index) => <span key={`${line}-${index}`}>{index ? <br /> : null}{line}</span>)}</>;
 }
 
+function safeBackgroundUrl(value: string) {
+  return value.replace(/["'\n\r()]/g, "");
+}
+
 export async function PublicFeatureHero({
   active,
   eyebrow,
@@ -56,10 +61,14 @@ export async function PublicFeatureHero({
   const renderedPrimaryHref = hero.primaryHref ?? primaryHref;
   const renderedSecondaryLabel = hero.secondaryLabel ?? secondaryLabel;
   const renderedSecondaryHref = hero.secondaryHref ?? secondaryHref;
+  const heroStyle = hero.imageUrl ? ({
+    "--moony-page-hero-image": `url("${safeBackgroundUrl(hero.imageUrl)}")`,
+    "--moony-page-hero-position": hero.imagePosition || "65% center",
+  } as CSSProperties) : undefined;
 
   return (
     <main className="min-h-screen bg-[#f8f0e5] text-[#5b2f22]">
-      <section className={`hero-photo ${heroClass} moony-grain relative min-h-[760px] overflow-hidden lg:min-h-screen`}>
+      <section style={heroStyle} className={`hero-photo ${heroClass} moony-grain relative min-h-[760px] overflow-hidden lg:min-h-screen`}>
         <PublicHeader active={active} />
 
         <div className="relative z-10 mx-auto flex min-h-[760px] max-w-[1660px] items-center px-5 pb-12 pt-36 sm:px-8 lg:min-h-screen lg:px-12">
