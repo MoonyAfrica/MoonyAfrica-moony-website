@@ -1,81 +1,8 @@
-import Link from "next/link";
-import {
-  BarChart3,
-  BookOpen,
-  CalendarDays,
-  ClipboardList,
-  FileText,
-  FolderOpen,
-  Gauge,
-  Handshake,
-  History,
-  Image as ImageIcon,
-  LayoutDashboard,
-  Mail,
-  Megaphone,
-  Menu,
-  MessageCircleMore,
-  Palette,
-  Settings,
-  ShieldCheck,
-  Sparkles,
-  UserCog,
-  Users,
-} from "lucide-react";
 import { AdminAccountMenu } from "./admin-account-menu";
 import { AdminGlobalSearch } from "./admin-global-search";
 import { AdminNotifications } from "./admin-notifications";
+import { AdminRoleNavigation } from "./admin-role-navigation";
 import { MoonyLogo } from "./moony-logo";
-
-const groups = [
-  {
-    label: "EXPÉRIENCE & CONTENU",
-    items: [
-      ["Dashboard", "/admin", LayoutDashboard],
-      ["Site & Design", "/admin/site-design", Palette],
-      ["Navigation & Footer", "/admin/navigation", Menu],
-      ["Pages", "/admin/pages", FileText],
-      ["Historique", "/admin/historique", History],
-      ["Médias", "/admin/medias", ImageIcon],
-      ["Ressources", "/admin/ressources", FolderOpen],
-      ["Articles", "/admin/articles", BookOpen],
-    ],
-  },
-  {
-    label: "COMMERCIAL & RELATION CLIENT",
-    items: [
-      ["CRM", "/admin/crm", Users],
-      ["Rendez-vous", "/admin/rendez-vous", CalendarDays],
-      ["Service client", "/admin/service-client", MessageCircleMore],
-    ],
-  },
-  {
-    label: "MARKETING & ACQUISITION",
-    items: [
-      ["Marketing", "/admin/marketing", Megaphone],
-      ["Newsletters", "/admin/newsletters", Mail],
-      ["Pop-ups & bandeaux", "/admin/popups", Sparkles],
-    ],
-  },
-  {
-    label: "MARQUE & CONFIANCE",
-    items: [
-      ["À propos", "/admin/a-propos", ShieldCheck],
-      ["Témoignages", "/admin/temoignages", MessageCircleMore],
-      ["Partenaires", "/admin/partenaires", Handshake],
-    ],
-  },
-  {
-    label: "PERFORMANCE & SYSTÈME",
-    items: [
-      ["Analytique", "/admin/analytics", BarChart3],
-      ["SEO", "/admin/seo", Gauge],
-      ["Paramètres", "/admin/parametres", Settings],
-      ["Équipe & rôles", "/admin/equipe", UserCog],
-      ["Journal d’activité", "/admin/journal-activite", ClipboardList],
-    ],
-  },
-] as const;
 
 export function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
   return (
@@ -83,29 +10,7 @@ export function AdminShell({ active, children }: { active: string; children: Rea
       <div className="grid min-h-screen lg:grid-cols-[214px_1fr]">
         <aside className="border-r border-[#5b2f22]/10 bg-[linear-gradient(180deg,#f8efe6_0%,#f5eadf_100%)] px-3 py-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
           <div className="px-3"><MoonyLogo compact /></div>
-          <div className="mt-6 border-t border-[#5b2f22]/10 pt-3">
-            {groups.map((group) => (
-              <div key={group.label} className="mb-4">
-                <p className="mb-1.5 px-3 text-[8px] font-semibold uppercase tracking-[.15em] text-[#5b2f22]/42">{group.label}</p>
-                <nav className="space-y-[2px]">
-                  {group.items.map(([label, href, Icon]) => (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition ${
-                        active === label
-                          ? "bg-[#ead1bf] font-semibold text-[#6f2d17] shadow-[inset_3px_0_0_#a95832]"
-                          : "text-[#42271f]/74 hover:bg-white/55 hover:text-[#5b2f22]"
-                      }`}
-                    >
-                      <Icon size={16} strokeWidth={1.65} />
-                      <span>{label}</span>
-                    </Link>
-                  ))}
-                </nav>
-              </div>
-            ))}
-          </div>
+          <AdminRoleNavigation active={active} />
 
           <div className="relative mt-7 overflow-hidden border-t border-[#5b2f22]/10 px-3 pb-4 pt-5">
             <div className="absolute -bottom-7 -left-8 h-24 w-24 rounded-full border border-[#b97955]/22" />
