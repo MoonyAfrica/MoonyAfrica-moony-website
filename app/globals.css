@@ -29,7 +29,7 @@ summary::-webkit-details-marker { display: none; }
 ::selection { background: var(--moony-peach); color: var(--moony-espresso); }
 
 .moony-serif {
-  font-family: "Bodoni 72", Didot, "Didot LT STD", "Baskerville", Georgia, "Times New Roman", serif;
+  font-family: "Bodoni 72", Didot, "Didot LT STD", Baskerville, Georgia, "Times New Roman", serif;
   font-weight: 400;
 }
 .moony-logo-type { letter-spacing: -0.075em; }
@@ -45,7 +45,7 @@ summary::-webkit-details-marker { display: none; }
   pointer-events: none;
   position: absolute;
   inset: 0;
-  opacity: .065;
+  opacity: .055;
   z-index: 2;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
   mix-blend-mode: multiply;
@@ -57,36 +57,40 @@ summary::-webkit-details-marker { display: none; }
   background-size: cover;
   background-position: center;
 }
-
 .hero-home {
   background-image:
-    linear-gradient(90deg, rgba(53, 22, 13, .82) 0%, rgba(67, 27, 16, .69) 28%, rgba(71, 31, 19, .22) 54%, rgba(71, 31, 19, .03) 76%),
-    radial-gradient(circle at 78% 26%, rgba(236, 181, 126, .18), transparent 28%),
+    linear-gradient(90deg, rgba(53,22,13,.83) 0%, rgba(67,27,16,.69) 28%, rgba(71,31,19,.22) 54%, rgba(71,31,19,.03) 76%),
+    radial-gradient(circle at 78% 26%, rgba(236,181,126,.16), transparent 28%),
     url('/images/home-hero.jpg');
   background-blend-mode: normal, screen, normal;
+  background-position: center, center, 62% center;
 }
 .hero-mission {
   background-image:
-    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.96) 31%, rgba(255,248,240,.72) 43%, rgba(255,248,240,.12) 65%),
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.96) 31%, rgba(255,248,240,.72) 43%, rgba(255,248,240,.10) 65%),
     url('/images/mission-hero.jpg');
+  background-position: center, 65% center;
 }
 .hero-approach {
   background-image:
-    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.69) 44%, rgba(255,248,240,.12) 65%),
-    linear-gradient(110deg, #f6eadb 0%, #d29b73 60%, #76503d 100%),
-    url('/images/approach-hero.webp');
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.69) 44%, rgba(255,248,240,.09) 65%),
+    linear-gradient(90deg, rgba(214,155,112,.08), rgba(111,70,48,.12)),
+    url('/images/home-hero.jpg');
+  background-position: center, center, 68% center;
 }
 .hero-about {
   background-image:
-    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 32%, rgba(255,248,240,.70) 45%, rgba(255,248,240,.13) 65%),
-    linear-gradient(110deg, #f7ebdc 0%, #d5a17c 62%, #86533c 100%),
-    url('/images/about-hero.webp');
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 32%, rgba(255,248,240,.70) 45%, rgba(255,248,240,.11) 65%),
+    linear-gradient(90deg, rgba(215,165,125,.05), rgba(133,82,59,.10)),
+    url('/images/home-hero.jpg');
+  background-position: center, center, 61% center;
 }
 .hero-community {
   background-image:
-    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.67) 43%, rgba(255,248,240,.10) 64%),
-    linear-gradient(110deg, #f7ebdc 0%, #d19b72 60%, #7f4e37 100%),
-    url('/images/community-hero.webp');
+    linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.67) 43%, rgba(255,248,240,.07) 64%),
+    linear-gradient(90deg, rgba(216,160,116,.04), rgba(116,71,48,.08)),
+    url('/images/home-hero.jpg');
+  background-position: center, center, 65% center;
 }
 
 .admin-shadow { box-shadow: 0 10px 30px rgba(70, 36, 24, .05); }
@@ -103,24 +107,21 @@ summary::-webkit-details-marker { display: none; }
 }
 
 @media (max-width: 1199px) {
-  .hero-home,
-  .hero-mission,
-  .hero-approach,
-  .hero-about,
-  .hero-community { background-position: 60% center; }
+  .hero-home { background-position: center, center, 66% center; }
+  .hero-mission, .hero-approach, .hero-about, .hero-community { background-position: center, center, 67% center; }
 }
 
 @media (max-width: 767px) {
-  .hero-photo { background-position: 66% center; }
   .hero-home {
     background-image:
-      linear-gradient(90deg, rgba(48,20,13,.88) 0%, rgba(55,22,14,.75) 58%, rgba(55,22,14,.42) 100%),
+      linear-gradient(90deg, rgba(48,20,13,.89) 0%, rgba(55,22,14,.78) 58%, rgba(55,22,14,.48) 100%),
       url('/images/home-hero.jpg');
+    background-position: center, 69% center;
   }
   .hero-mission,
   .hero-approach,
   .hero-about,
   .hero-community {
-    background-position: 72% center;
+    background-position: center, 72% center;
   }
 }
