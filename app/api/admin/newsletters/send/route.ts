@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asText, requireAdmin } from "@/lib/admin-api";
+import { asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char] ?? char));
@@ -16,7 +16,7 @@ function campaignHtml(content: Record<string, unknown>) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "marketing.write");
   if (error || !supabase) return error;
 
   let body: Record<string, unknown>;
@@ -61,11 +61,13 @@ export async function POST(request: Request) {
   if (!sendResponse.ok) {
     const sendError = await sendResponse.json().catch(() => ({}));
     await supabase.from("newsletter_campaigns").update({ provider: "brevo", provider_campaign_id: String(created.id), status: "paused", updated_at: new Date().toISOString() }).eq("id", id);
+    await writeAuditLog(supabase, session, "newsletter.send_failed", "newsletter_campaign", id, `Envoi échoué pour « ${campaign.name} »`, { provider:"brevo", providerCampaignId:String(created.id) });
     return NextResponse.json({ error: sendError.message || "Campagne créée dans Brevo mais envoi non déclenché." }, { status: 502 });
   }
 
   const now = new Date().toISOString();
   const { data: saved, error: updateError } = await supabase.from("newsletter_campaigns").update({ provider: "brevo", provider_campaign_id: String(created.id), status: "sent", sent_at: now, updated_at: now }).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "newsletter.sent", "newsletter_campaign", id, `Newsletter « ${campaign.name} » envoyée`, { provider:"brevo", providerCampaignId:String(created.id), audience:campaign.audience });
   return NextResponse.json({ ok: true, campaign: saved });
 }
