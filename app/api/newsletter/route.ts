@@ -5,6 +5,34 @@ function text(value: unknown, max = 240) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
+async function syncToBrevo(email: string, firstName: string) {
+  const apiKey = process.env.BREVO_API_KEY;
+  const listId = Number(process.env.BREVO_LIST_ID || "");
+  if (!apiKey || !Number.isFinite(listId) || !listId) return false;
+
+  try {
+    const response = await fetch("https://api.brevo.com/v3/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "api-key": apiKey, accept: "application/json" },
+      body: JSON.stringify({
+        email,
+        attributes: firstName ? { FIRSTNAME: firstName } : undefined,
+        listIds: [listId],
+        updateEnabled: true,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.error("MOONY Brevo contact sync failed", response.status, detail.slice(0, 500));
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("MOONY Brevo contact sync failed", error);
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   if (!supabase) return NextResponse.json({ error: "La newsletter n’est pas encore reliée à la base de données." }, { status: 503 });
@@ -33,5 +61,7 @@ export async function POST(request: Request) {
     console.error("MOONY newsletter subscription failed", error);
     return NextResponse.json({ error: "Inscription impossible pour le moment." }, { status: 500 });
   }
-  return NextResponse.json({ ok: true }, { status: 201 });
+
+  const syncedToBrevo = await syncToBrevo(email, firstName);
+  return NextResponse.json({ ok: true, syncedToBrevo }, { status: 201 });
 }
