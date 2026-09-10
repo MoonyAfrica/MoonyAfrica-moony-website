@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CalendarDays, Heart, Sprout, Users } from "lucide-react";
+import { CmsSections } from "@/components/cms-sections";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
 import { getPublishedPage } from "@/lib/cms";
@@ -67,6 +68,7 @@ export default async function CommunityPage() {
         </div>
       </section>
 
+      <CmsSections sections={page?.sections ?? []} />
       <PublicFooter />
     </main>
   );
