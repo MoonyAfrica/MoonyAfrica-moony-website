@@ -5,6 +5,7 @@ import {
   createAdminSessionToken,
   verifyMfaCode,
 } from "@/lib/admin-auth";
+import { createStoredAdminSession } from "@/lib/control-center-sessions";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function sessionResponse(token: string, body: Record<string, unknown>) {
@@ -17,6 +18,13 @@ function sessionResponse(token: string, body: Record<string, unknown>) {
     maxAge: adminSessionMaxAgeSeconds(),
   });
   return response;
+}
+
+async function findUser(supabase: any, id: string) {
+  const full = await supabase.from("control_center_users").select("id,full_name,email,active,role_id,must_change_password").eq("id", id).maybeSingle();
+  if (!full.error) return full.data;
+  const fallback = await supabase.from("control_center_users").select("id,full_name,email,active,role_id").eq("id", id).maybeSingle();
+  return fallback.data ? { ...fallback.data, must_change_password: false } : null;
 }
 
 export async function POST(request: Request) {
@@ -46,12 +54,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: attempts >= 5 ? "Trop de tentatives. Recommencez la connexion." : "Code incorrect." }, { status: attempts >= 5 ? 429 : 401 });
   }
 
-  const { data: user, error: userError } = await supabase
-    .from("control_center_users")
-    .select("id,full_name,email,active,role_id")
-    .eq("id", challenge.user_id)
-    .maybeSingle();
-  if (userError || !user) return NextResponse.json({ error: "Compte introuvable." }, { status: 404 });
+  const user = await findUser(supabase, challenge.user_id);
+  if (!user) return NextResponse.json({ error: "Compte introuvable." }, { status: 404 });
   if (!user.active) return NextResponse.json({ error: "Ce compte est désactivé." }, { status: 403 });
 
   const { data: role, error: roleError } = await supabase
@@ -62,7 +66,9 @@ export async function POST(request: Request) {
   if (roleError || !role) return NextResponse.json({ error: "Rôle introuvable." }, { status: 403 });
 
   const permissions = Array.isArray(role.permissions) ? role.permissions.filter((value): value is string => typeof value === "string") : [];
-  const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions, mfa: true };
+  const mustChangePassword = Boolean(user.must_change_password);
+  const stored = await createStoredAdminSession(supabase, user.id, request, mustChangePassword);
+  const session = { sub: user.id, email: user.email, name: user.full_name, role: role.key, permissions, mfa: true, sid: stored?.id, mustChangePassword };
   const token = createAdminSessionToken(session);
   if (!token) return NextResponse.json({ error: "Configuration de session incomplète." }, { status: 503 });
 
@@ -79,11 +85,11 @@ export async function POST(request: Request) {
       actor_role: role.key,
       action: "login",
       entity_type: "session",
-      entity_id: user.id,
+      entity_id: stored?.id ?? user.id,
       summary: "Connexion au Control Center avec double authentification",
-      metadata: { mfa: true },
+      metadata: { mfa: true, revocableSession: Boolean(stored), mustChangePassword },
     });
   } catch {}
 
-  return sessionResponse(token, { ok: true, session: { ...session, roleName: role.name } });
+  return sessionResponse(token, { ok: true, session: { ...session, roleName: role.name }, mustChangePassword });
 }
