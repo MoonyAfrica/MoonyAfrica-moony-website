@@ -4,6 +4,7 @@ import {
   BookOpen,
   CalendarDays,
   ChevronDown,
+  ClipboardList,
   FileText,
   FolderOpen,
   Gauge,
@@ -19,6 +20,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  UserCog,
   Users,
 } from "lucide-react";
 import { AdminGlobalSearch } from "./admin-global-search";
@@ -69,6 +71,8 @@ const groups = [
       ["Analytique", "/admin/analytics", BarChart3],
       ["SEO", "/admin/seo", Gauge],
       ["Paramètres", "/admin/parametres", Settings],
+      ["Équipe & rôles", "/admin/equipe", UserCog],
+      ["Journal d’activité", "/admin/journal-activite", ClipboardList],
     ],
   },
 ] as const;
