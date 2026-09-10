@@ -2,6 +2,13 @@ import type { Metadata } from "next";
 import type { PublishedPage } from "@/lib/cms";
 import { getPublicSiteSettings } from "@/lib/public-settings";
 
+function formatFallbackTitle(title:string,template:string,organizationName:string){
+ const clean=title.trim();
+ if(!clean)return organizationName;
+ if(organizationName&&clean.toLocaleLowerCase().includes(organizationName.toLocaleLowerCase()))return clean;
+ return template.includes("%s")?template.replace("%s",clean):clean;
+}
+
 export async function buildCmsMetadata({
   page,
   fallbackTitle,
@@ -15,7 +22,7 @@ export async function buildCmsMetadata({
 }): Promise<Metadata> {
   const { seo } = await getPublicSiteSettings();
   const custom = page?.metadata ?? {};
-  const title = page?.seo_title || fallbackTitle;
+  const title = page?.seo_title || formatFallbackTitle(fallbackTitle,seo.titleTemplate,seo.organizationName);
   const description = page?.seo_description || page?.hero?.body || fallbackDescription;
   const socialTitle = custom.ogTitle?.trim() || title;
   const socialDescription = custom.ogDescription?.trim() || description;
