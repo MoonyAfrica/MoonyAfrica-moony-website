@@ -23,8 +23,10 @@ export type AdminSession = {
   role: string;
   permissions: string[];
   exp: number;
+  sid?: string;
   legacy?: boolean;
   mfa?: boolean;
+  mustChangePassword?: boolean;
 };
 
 function envPassword() { return process.env.ADMIN_CONTROL_CENTER_PASSWORD ?? ""; }
@@ -155,5 +157,6 @@ export function legacyFounderSession(): Omit<AdminSession, "exp"> {
     permissions: ["*"],
     legacy: true,
     mfa: false,
+    mustChangePassword: false,
   };
 }
