@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 const statuses = new Set(["draft", "scheduled", "sending", "sent", "paused", "cancelled"]);
 
@@ -8,7 +8,7 @@ async function parseBody(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "marketing.read");
   if (error || !supabase) return error;
 
   const [{ data: campaigns, error: campaignError }, { count, error: subscriberError }] = await Promise.all([
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "marketing.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -44,16 +44,18 @@ export async function POST(request: Request) {
   }).select("*").single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "newsletter.created", "newsletter_campaign", data.id, `Newsletter « ${data.name} » créée`, { status:data.status, audience:data.audience });
   return NextResponse.json({ campaign: data }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "marketing.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
   const id = asText(body.id, 80);
   if (!id) return NextResponse.json({ error: "Identifiant manquant." }, { status: 422 });
+  const { data: before } = await supabase.from("newsletter_campaigns").select("name,status,audience").eq("id",id).maybeSingle();
 
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (typeof body.name === "string") patch.name = asText(body.name, 180);
@@ -68,15 +70,18 @@ export async function PATCH(request: Request) {
 
   const { data, error: updateError } = await supabase.from("newsletter_campaigns").update(patch).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "newsletter.updated", "newsletter_campaign", id, `Newsletter « ${data.name} » modifiée`, { previousStatus:before?.status ?? null, status:data.status, audience:data.audience });
   return NextResponse.json({ campaign: data });
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "marketing.write");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!id) return NextResponse.json({ error: "Identifiant manquant." }, { status: 422 });
+  const { data: before } = await supabase.from("newsletter_campaigns").select("name,status").eq("id",id).maybeSingle();
   const { error: deleteError } = await supabase.from("newsletter_campaigns").delete().eq("id", id);
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "newsletter.deleted", "newsletter_campaign", id, before ? `Newsletter « ${before.name} » supprimée` : "Newsletter supprimée", { status:before?.status ?? null });
   return NextResponse.json({ ok: true });
 }
