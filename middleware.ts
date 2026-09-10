@@ -8,7 +8,6 @@ const PUBLIC_ADMIN_PATHS = [
   "/admin/reinitialiser-mot-de-passe",
 ];
 const PUBLIC_ADMIN_API_PATHS = [
-  "/api/admin/session",
   "/api/admin/session/mfa",
   "/api/admin/password-reset/request",
   "/api/admin/password-reset/confirm",
@@ -127,9 +126,13 @@ function hasAnyPermission(session: EdgeSession, permissions: string[] | null) {
   return owned.includes("*") || permissions.some((permission) => owned.includes(permission));
 }
 
-function isPublicPath(pathname: string) {
-  return PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))
-    || PUBLIC_ADMIN_API_PATHS.includes(pathname);
+function isPublicPath(pathname: string, method: string) {
+  if (PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
+  if (PUBLIC_ADMIN_API_PATHS.includes(pathname)) return true;
+  // Login and logout must remain reachable without a current session; GET is deliberately
+  // protected so a revoked cookie cannot still report itself as authenticated.
+  if (pathname === "/api/admin/session" && method !== "GET") return true;
+  return false;
 }
 
 function unauthenticated(request: NextRequest, isApi: boolean, clearCookie = false) {
@@ -150,7 +153,7 @@ function unauthenticated(request: NextRequest, isApi: boolean, clearCookie = fal
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isApi = pathname.startsWith("/api/admin/");
-  if (isPublicPath(pathname)) return secure(NextResponse.next());
+  if (isPublicPath(pathname, request.method)) return secure(NextResponse.next());
 
   const token = request.cookies.get(COOKIE)?.value ?? "";
   const session = token ? await verifySession(token) : null;
