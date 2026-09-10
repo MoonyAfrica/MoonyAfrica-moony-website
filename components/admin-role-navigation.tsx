@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  BarChart3, BookOpen, CalendarDays, ClipboardList, FileText, FolderOpen, Gauge, Handshake, History,
+  Activity, BarChart3, BookOpen, CalendarDays, ClipboardList, FileText, FolderOpen, Gauge, Handshake, History,
   Image as ImageIcon, LayoutDashboard, Mail, Megaphone, Menu, MessageCircleMore, Palette, Settings,
   ShieldCheck, Sparkles, UserCog, Users,
 } from "lucide-react";
@@ -39,6 +39,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Partenaires","/admin/partenaires",Handshake,"content.read"],
  ]},
  {label:"PERFORMANCE & SYSTÈME",items:[
+  ["Centre d’activité","/admin/activite",Activity,null],
   ["Analytique","/admin/analytics",BarChart3,"analytics.read"],
   ["SEO","/admin/seo",Gauge,"seo.read"],
   ["Paramètres","/admin/parametres",Settings,"settings.read"],
