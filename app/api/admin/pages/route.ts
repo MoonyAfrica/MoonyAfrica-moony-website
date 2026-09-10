@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import type { AdminSession } from "@/lib/admin-auth";
 
 const allowedStatuses = new Set(["draft", "published", "archived"]);
 const pageFields = "id,title,slug,status,seo_title,seo_description,hero,sections,metadata,created_at,updated_at";
@@ -13,11 +14,7 @@ function cleanSlug(value: unknown) {
 }
 
 async function jsonBody(request: Request) {
-  try {
-    return (await request.json()) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+  try { return (await request.json()) as Record<string, unknown>; } catch { return null; }
 }
 
 function actionFor(previousStatus: string | undefined, nextStatus: string | undefined): VersionAction {
@@ -27,12 +24,12 @@ function actionFor(previousStatus: string | undefined, nextStatus: string | unde
   return "save";
 }
 
-async function saveVersion(supabase: AdminSupabase, pageId: string, snapshot: Record<string, unknown>, action: VersionAction, note?: string) {
+async function saveVersion(supabase: AdminSupabase, pageId: string, snapshot: Record<string, unknown>, action: VersionAction, session: AdminSession | null, note?: string) {
   try {
     await supabase.from("website_page_versions").insert({
       page_id: pageId,
       action,
-      created_by: "MOONY Admin",
+      created_by: session?.name || session?.email || "MOONY Admin",
       note: note || null,
       snapshot,
     });
@@ -42,7 +39,7 @@ async function saveVersion(supabase: AdminSupabase, pageId: string, snapshot: Re
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "site.read");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id")?.trim() || "";
 
@@ -59,7 +56,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "site.write");
   if (error || !supabase) return error;
   const body = await jsonBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -86,12 +83,13 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
-  await saveVersion(supabase, data.id, data as Record<string, unknown>, "create", "Création initiale de la page.");
+  await saveVersion(supabase, data.id, data as Record<string, unknown>, "create", session, "Création initiale de la page.");
+  await writeAuditLog(supabase, session, "cms.page_created", "website_page", data.id, `Page « ${data.title} » créée`, { slug: data.slug, status: data.status });
   return NextResponse.json({ page: data }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "site.write");
   if (error || !supabase) return error;
   const body = await jsonBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -114,20 +112,23 @@ export async function PATCH(request: Request) {
   if (typeof body.metadata === "object" && body.metadata) patch.metadata = body.metadata;
 
   const nextStatus = typeof patch.status === "string" ? patch.status : current.status;
-  await saveVersion(supabase, id, current as Record<string, unknown>, actionFor(current.status, nextStatus));
+  const action = actionFor(current.status, nextStatus);
+  await saveVersion(supabase, id, current as Record<string, unknown>, action, session);
 
   const { data, error: updateError } = await supabase.from("website_pages").update(patch).eq("id", id).select(pageFields).single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, `cms.${action}`, "website_page", id, `Page « ${data.title} » modifiée`, { slug: data.slug, previousStatus: current.status, status: data.status });
   return NextResponse.json({ page: data });
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "site.write");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!id) return NextResponse.json({ error: "Identifiant manquant." }, { status: 422 });
-
+  const { data: current } = await supabase.from("website_pages").select("id,title,slug").eq("id", id).maybeSingle();
   const { error: deleteError } = await supabase.from("website_pages").delete().eq("id", id);
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "cms.page_deleted", "website_page", id, current ? `Page « ${current.title} » supprimée` : "Page supprimée", { slug: current?.slug ?? null });
   return NextResponse.json({ ok: true });
 }
