@@ -1,53 +1,131 @@
 import Link from "next/link";
-import { Bell, ChevronDown, Search } from "lucide-react";
+import {
+  BarChart3,
+  Bell,
+  BookOpen,
+  CalendarDays,
+  ChevronDown,
+  FileText,
+  FolderOpen,
+  Gauge,
+  Handshake,
+  LayoutDashboard,
+  Mail,
+  Megaphone,
+  MessageCircleMore,
+  Palette,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { MoonyLogo } from "./moony-logo";
 
 const groups = [
-  { label: "EXPÉRIENCE & CONTENU", items: [["Dashboard", "/admin"], ["Site & Design", "/admin/site-design"], ["Pages", "/admin/pages"], ["Ressources", "/admin/ressources"], ["Articles", "/admin/articles"]] },
-  { label: "COMMERCIAL & RELATION CLIENT", items: [["CRM", "/admin/crm"], ["Rendez-vous", "/admin/rendez-vous"], ["Service client", "/admin/service-client"]] },
-  { label: "MARKETING & ACQUISITION", items: [["Marketing", "/admin/marketing"], ["Newsletters", "/admin/newsletters"], ["Pop-ups & bandeaux", "/admin/popups"]] },
-  { label: "MARQUE & CONFIANCE", items: [["À propos", "/admin/a-propos"], ["Témoignages", "/admin/temoignages"], ["Partenaires", "/admin/partenaires"]] },
-  { label: "PERFORMANCE & SYSTÈME", items: [["Analytique", "/admin/analytics"], ["SEO", "/admin/seo"], ["Paramètres", "/admin/parametres"]] },
+  {
+    label: "EXPÉRIENCE & CONTENU",
+    items: [
+      ["Dashboard", "/admin", LayoutDashboard],
+      ["Site & Design", "/admin/site-design", Palette],
+      ["Pages", "/admin/pages", FileText],
+      ["Ressources", "/admin/ressources", FolderOpen],
+      ["Articles", "/admin/articles", BookOpen],
+    ],
+  },
+  {
+    label: "COMMERCIAL & RELATION CLIENT",
+    items: [
+      ["CRM", "/admin/crm", Users],
+      ["Rendez-vous", "/admin/rendez-vous", CalendarDays],
+      ["Service client", "/admin/service-client", MessageCircleMore],
+    ],
+  },
+  {
+    label: "MARKETING & ACQUISITION",
+    items: [
+      ["Marketing", "/admin/marketing", Megaphone],
+      ["Newsletters", "/admin/newsletters", Mail],
+      ["Pop-ups & bandeaux", "/admin/popups", Sparkles],
+    ],
+  },
+  {
+    label: "MARQUE & CONFIANCE",
+    items: [
+      ["À propos", "/admin/a-propos", ShieldCheck],
+      ["Témoignages", "/admin/temoignages", MessageCircleMore],
+      ["Partenaires", "/admin/partenaires", Handshake],
+    ],
+  },
+  {
+    label: "PERFORMANCE & SYSTÈME",
+    items: [
+      ["Analytique", "/admin/analytics", BarChart3],
+      ["SEO", "/admin/seo", Gauge],
+      ["Paramètres", "/admin/parametres", Settings],
+    ],
+  },
 ] as const;
 
 export function AdminShell({ active, children }: { active: string; children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-[#fbf8f4] text-[#301b15]">
-      <div className="grid min-h-screen lg:grid-cols-[220px_1fr]">
-        <aside className="border-r border-[#5b2f22]/10 bg-[#f7eee5] px-4 py-5">
-          <div className="px-2"><MoonyLogo /></div>
-          <div className="mt-6 border-t border-[#5b2f22]/10 pt-4">
+      <div className="grid min-h-screen lg:grid-cols-[214px_1fr]">
+        <aside className="border-r border-[#5b2f22]/10 bg-[linear-gradient(180deg,#f8efe6_0%,#f5eadf_100%)] px-3 py-5 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
+          <div className="px-3"><MoonyLogo compact /></div>
+          <div className="mt-6 border-t border-[#5b2f22]/10 pt-3">
             {groups.map((group) => (
-              <div key={group.label} className="mb-5">
-                <p className="mb-2 px-3 text-[9px] font-semibold uppercase tracking-[.18em] text-[#5b2f22]/48">{group.label}</p>
-                <nav className="space-y-1">
-                  {group.items.map(([label, href]) => (
-                    <Link key={href} href={href} className={`block rounded-lg px-3 py-2.5 text-[13px] transition ${active === label ? "bg-[#ecd5c4] font-semibold text-[#6f2d17]" : "text-[#42271f]/76 hover:bg-white/55"}`}>
-                      {label}
+              <div key={group.label} className="mb-4">
+                <p className="mb-1.5 px-3 text-[8px] font-semibold uppercase tracking-[.15em] text-[#5b2f22]/42">{group.label}</p>
+                <nav className="space-y-[2px]">
+                  {group.items.map(([label, href, Icon]) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition ${
+                        active === label
+                          ? "bg-[#ead1bf] font-semibold text-[#6f2d17] shadow-[inset_3px_0_0_#a95832]"
+                          : "text-[#42271f]/74 hover:bg-white/55 hover:text-[#5b2f22]"
+                      }`}
+                    >
+                      <Icon size={16} strokeWidth={1.65} />
+                      <span>{label}</span>
                     </Link>
                   ))}
                 </nav>
               </div>
             ))}
           </div>
-          <div className="mt-8 border-t border-[#5b2f22]/10 px-3 pt-5">
-            <p className="moony-serif text-lg leading-6 text-[#7a432d]">Un monde où<br />chaque femme<br />peut s’épanouir</p>
-            <p className="mt-5 text-[10px] leading-4 text-[#5b2f22]/45">MOONY<br />Web Studio<br />v1.0.0</p>
+
+          <div className="relative mt-7 overflow-hidden border-t border-[#5b2f22]/10 px-3 pb-4 pt-5">
+            <div className="absolute -bottom-7 -left-8 h-24 w-24 rounded-full border border-[#b97955]/22" />
+            <div className="absolute -bottom-12 left-3 h-28 w-28 rounded-full border border-[#b97955]/14" />
+            <p className="moony-serif relative text-[18px] leading-[1.15] text-[#8a4a31]">Un monde où<br />chaque femme<br />peut s’épanouir</p>
+            <span className="relative mt-3 block h-px w-8 bg-[#a95832]/65" />
+            <p className="relative mt-5 text-[9px] leading-4 text-[#5b2f22]/42">MOONY<br />Web Studio<br />v1.0.0</p>
           </div>
         </aside>
 
         <section className="min-w-0">
-          <header className="sticky top-0 z-30 flex h-[68px] items-center border-b border-[#5b2f22]/10 bg-[#fffdf9]/92 px-5 backdrop-blur lg:px-8">
-            <div className="moony-serif hidden text-2xl text-[#5b2f22] xl:block">Control Center</div>
-            <div className="mx-auto flex w-full max-w-[640px] items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-3 py-2.5 text-sm text-[#5b2f22]/45 xl:ml-10 xl:mr-auto">
-              <Search size={17} /><span>Rechercher un contact, une page, un article…</span>
+          <header className="sticky top-0 z-30 flex h-[66px] items-center border-b border-[#5b2f22]/10 bg-[#fffdf9]/94 px-5 backdrop-blur-xl lg:px-7">
+            <div className="moony-serif hidden shrink-0 text-[23px] text-[#5b2f22] xl:block">Control Center</div>
+            <div className="mx-auto flex w-full max-w-[650px] items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-3 py-2.5 text-[12px] text-[#5b2f22]/45 xl:ml-10 xl:mr-auto">
+              <Search size={16} />
+              <span>Rechercher un contact, une page, un article…</span>
             </div>
-            <div className="ml-5 flex items-center gap-4">
-              <button className="relative"><Bell size={20} /><span className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full bg-[#9d4c27] text-[9px] text-white">3</span></button>
-              <div className="hidden items-center gap-2 sm:flex"><div className="grid h-9 w-9 place-items-center rounded-full bg-[#c98b64] text-xs font-semibold text-white">AK</div><div className="text-xs"><strong className="block">Aïssata Koné</strong><span className="text-[#5b2f22]/45">Administratrice</span></div><ChevronDown size={14} /></div>
+            <div className="ml-4 flex items-center gap-4">
+              <button className="relative rounded-full p-2 transition hover:bg-[#f5e8df]" aria-label="Notifications">
+                <Bell size={18} />
+                <span className="absolute right-0 top-0 grid h-4 w-4 place-items-center rounded-full bg-[#9d4c27] text-[8px] font-bold text-white">3</span>
+              </button>
+              <div className="hidden items-center gap-2 border-l border-[#5b2f22]/10 pl-4 sm:flex">
+                <div className="grid h-9 w-9 place-items-center rounded-full bg-[linear-gradient(145deg,#d8a17e,#a95631)] text-[10px] font-semibold text-white">AK</div>
+                <div className="text-[11px] leading-[1.25]"><strong className="block font-semibold">Aïssata Koné</strong><span className="text-[#5b2f22]/45">Administratrice</span></div>
+                <ChevronDown size={13} />
+              </div>
             </div>
           </header>
-          <div className="p-5 lg:p-8">{children}</div>
+          <div className="p-4 sm:p-5 lg:p-7">{children}</div>
         </section>
       </div>
     </main>
