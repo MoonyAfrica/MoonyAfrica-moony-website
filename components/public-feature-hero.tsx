@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BookOpen, HeartHandshake, Sprout } from "lucide-react";
+import { getPublishedPage, heroLines } from "@/lib/cms";
 import { PublicFooter } from "./public-footer";
 import { PublicHeader } from "./public-header";
 
@@ -19,8 +20,22 @@ type Props = {
 };
 
 const featureIcons = [BookOpen, Sprout, HeartHandshake];
+const slugs: Record<string, string> = {
+  "Notre mission": "/notre-mission",
+  "Notre approche": "/notre-approche",
+  "À propos": "/a-propos",
+};
 
-export function PublicFeatureHero({
+function CmsTitle({ active, value, fallback }: { active: string; value?: string; fallback: React.ReactNode }) {
+  if (!value?.trim()) return <>{fallback}</>;
+  const lines = heroLines(value, []);
+  if (active === "Notre mission" && lines.length > 1) {
+    return <>{lines[0]}<br /><span className="block max-w-[600px] pt-4 text-[.56em] leading-[1.02] tracking-[-.035em]">{lines.slice(1).join(" ")}</span></>;
+  }
+  return <>{lines.map((line, index) => <span key={`${line}-${index}`}>{index ? <br /> : null}{line}</span>)}</>;
+}
+
+export async function PublicFeatureHero({
   active,
   eyebrow,
   title,
@@ -32,6 +47,15 @@ export function PublicFeatureHero({
   secondaryHref,
   features = [],
 }: Props) {
+  const cms = slugs[active] ? await getPublishedPage(slugs[active]) : null;
+  const hero = cms?.hero ?? {};
+  const renderedEyebrow = hero.eyebrow ?? eyebrow;
+  const renderedBody = hero.body ?? body;
+  const renderedPrimaryLabel = hero.primaryLabel ?? primaryLabel;
+  const renderedPrimaryHref = hero.primaryHref ?? primaryHref;
+  const renderedSecondaryLabel = hero.secondaryLabel ?? secondaryLabel;
+  const renderedSecondaryHref = hero.secondaryHref ?? secondaryHref;
+
   return (
     <main className="min-h-screen bg-[#f8f0e5] text-[#5b2f22]">
       <section className={`hero-photo ${heroClass} moony-grain relative min-h-[760px] overflow-hidden lg:min-h-screen`}>
@@ -39,31 +63,31 @@ export function PublicFeatureHero({
 
         <div className="relative z-10 mx-auto flex min-h-[760px] max-w-[1660px] items-center px-5 pb-12 pt-36 sm:px-8 lg:min-h-screen lg:px-12">
           <div className="max-w-[650px]">
-            {eyebrow ? (
-              <p className="mb-4 text-[13px] font-medium uppercase tracking-[.18em] text-[#8b4b32]">{eyebrow}</p>
+            {renderedEyebrow ? (
+              <p className="mb-4 text-[13px] font-medium uppercase tracking-[.18em] text-[#8b4b32]">{renderedEyebrow}</p>
             ) : null}
 
             <h1 className="moony-serif max-w-[620px] text-[54px] leading-[.97] tracking-[-0.047em] sm:text-[66px] lg:text-[74px] xl:text-[80px]">
-              {title}
+              <CmsTitle active={active} value={hero.title} fallback={title} />
             </h1>
 
             <p className="mt-6 max-w-[555px] text-[17px] leading-[1.45] text-[#5b2f22]/82 sm:text-[18px]">
-              {body}
+              {renderedBody}
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3 sm:gap-4">
               <Link
-                href={primaryHref}
+                href={renderedPrimaryHref}
                 className="rounded-full bg-[#853718] px-7 py-3.5 text-[14px] font-medium text-white shadow-[0_12px_36px_rgba(91,47,34,.08)] transition hover:-translate-y-[1px]"
               >
-                {primaryLabel}
+                {renderedPrimaryLabel}
               </Link>
-              {secondaryLabel && secondaryHref ? (
+              {renderedSecondaryLabel && renderedSecondaryHref ? (
                 <Link
-                  href={secondaryHref}
+                  href={renderedSecondaryHref}
                   className="rounded-full border border-[#5b2f22]/55 bg-[#fffaf4]/20 px-7 py-3.5 text-[14px] font-medium text-[#5b2f22] backdrop-blur-[2px] transition hover:bg-[#fffaf4]/45"
                 >
-                  {secondaryLabel}
+                  {renderedSecondaryLabel}
                 </Link>
               ) : null}
             </div>
