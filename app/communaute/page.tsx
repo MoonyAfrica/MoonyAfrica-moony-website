@@ -1,19 +1,91 @@
-import { PublicFeatureHero } from "@/components/public-feature-hero";
+import Link from "next/link";
+import { CalendarDays, Heart, Sprout, Users } from "lucide-react";
+import { PublicHeader } from "@/components/public-header";
+
+const pillars = [
+  {
+    title: "Entre elles",
+    body: "Un espace d’échange libre et bienveillant entre femmes.",
+    icon: Users,
+  },
+  {
+    title: "Groupes thématiques",
+    body: "Cycle, fertilité, maternité, post-partum, bien-être et plus.",
+    icon: Sprout,
+  },
+  {
+    title: "Témoignages & partages",
+    body: "Des expériences vécues pour se sentir comprise et soutenue.",
+    icon: Heart,
+  },
+  {
+    title: "Événements & ateliers",
+    body: "Rencontres, conversations et contenus pour apprendre ensemble.",
+    icon: CalendarDays,
+  },
+];
 
 export default function CommunityPage() {
   return (
-    <PublicFeatureHero
-      active="Communauté"
-      heroClass="hero-community"
-      title={<>Une communauté<br />pensée pour écouter,<br />partager et avancer<br />ensemble.</>}
-      body="Avec Entre Elles, MOONY offre un espace bienveillant où les femmes peuvent échanger, poser leurs questions, trouver du soutien et accéder à des ressources adaptées à chaque étape de leur vie."
-      primaryLabel="Rejoindre la communauté"
-      primaryHref="https://application.moony-africa.com"
-      features={[
-        { title: "Entre Elles", body: "Un espace d’échange libre et bienveillant entre femmes.", icon: "◎" },
-        { title: "Groupes thématiques", body: "Cycle, fertilité, maternité, post-partum, bien-être et plus.", icon: "⌁" },
-        { title: "Témoignages", body: "Des expériences vécues pour se sentir comprise et soutenue.", icon: "♡" },
-      ]}
-    />
+    <main className="min-h-screen bg-[#fffaf4] text-[#5b2f22]">
+      <section className="hero-photo hero-community moony-grain relative min-h-[700px] overflow-hidden">
+        <PublicHeader active="Communauté" />
+
+        <div className="relative z-10 mx-auto flex min-h-[700px] max-w-[1660px] items-center px-5 pb-10 pt-36 sm:px-8 lg:px-12">
+          <div className="max-w-[610px]">
+            <h1 className="moony-serif text-[54px] leading-[.96] tracking-[-.048em] sm:text-[66px] lg:text-[76px]">
+              Une communauté
+              <br />pensée pour écouter,
+              <br />partager et avancer
+              <br />ensemble.
+            </h1>
+
+            <p className="mt-6 max-w-[535px] text-[17px] leading-[1.5] text-[#5b2f22]/82">
+              Avec Entre elles, MOONY offre un espace bienveillant où les femmes peuvent échanger, poser leurs questions, trouver du soutien et accéder à des ressources adaptées à chaque étape de leur vie.
+            </p>
+
+            <Link
+              href="https://application.moony-africa.com"
+              className="mt-8 inline-flex rounded-full bg-[#853718] px-8 py-3.5 text-[14px] font-medium text-white shadow-[0_12px_34px_rgba(91,47,34,.09)] transition hover:-translate-y-[1px]"
+            >
+              Rejoindre la communauté
+            </Link>
+          </div>
+
+          <div className="pointer-events-none absolute right-[7%] top-[18%] hidden max-w-[245px] rotate-[-4deg] text-center xl:block">
+            <p className="moony-serif text-[26px] italic leading-[1.2] text-[#7a4029]/72">
+              Des femmes qui se soutiennent vont plus loin.
+            </p>
+            <span className="mx-auto mt-5 block h-px w-10 bg-[#7a4029]/45" />
+          </div>
+        </div>
+      </section>
+
+      <section className="relative z-10 border-y border-[#5b2f22]/10 bg-[#fffaf4]">
+        <div className="mx-auto grid max-w-[1660px] px-5 py-9 sm:px-8 md:grid-cols-2 lg:grid-cols-4 lg:px-12">
+          {pillars.map((pillar, index) => {
+            const Icon = pillar.icon;
+            return (
+              <article
+                key={pillar.title}
+                className={`px-5 py-6 text-center lg:px-8 ${index ? "lg:border-l lg:border-[#5b2f22]/14" : ""}`}
+              >
+                <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#f5ded0] text-[#8f3f20]">
+                  <Icon size={25} strokeWidth={1.5} />
+                </div>
+                <h2 className="moony-serif mt-4 text-[28px] leading-none">{pillar.title}</h2>
+                <p className="mx-auto mt-3 max-w-[250px] text-[14px] leading-5 text-[#5b2f22]/72">{pillar.body}</p>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center gap-4 px-6 pb-10 text-[13px] text-[#7a4029]/78 sm:gap-6">
+          <span className="h-px w-14 bg-[#9b684e]/35" />
+          <span>Sororité</span><span>•</span><span>Confidentialité</span><span>•</span><span>Bienveillance</span><span>•</span><span>Partage</span>
+          <span className="h-px w-14 bg-[#9b684e]/35" />
+        </div>
+      </section>
+    </main>
   );
 }
