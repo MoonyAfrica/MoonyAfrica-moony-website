@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin, writeAuditLog } from "@/lib/admin-api";
-import type { AdminPermission } from "@/lib/admin-auth";
+import { hasAdminPermission, type AdminPermission } from "@/lib/admin-auth";
 
 const knownKeys = ["general","integrations","privacy","branding","pricing","seo","navigation","footer"] as const;
 
@@ -10,9 +10,19 @@ function writePermission(keys: string[]): AdminPermission {
   return "settings.write";
 }
 
+function readableKeys(session: ReturnType<typeof requireAdmin>["session"]) {
+  if (hasAdminPermission(session,"settings.read")) return [...knownKeys];
+  const keys = new Set<(typeof knownKeys)[number]>();
+  if (hasAdminPermission(session,"site.read")) ["branding","navigation","footer"].forEach(key=>keys.add(key as (typeof knownKeys)[number]));
+  if (hasAdminPermission(session,"seo.read")) keys.add("seo");
+  return [...keys];
+}
+
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request, "settings.read"); if (error || !supabase) return error;
-  const { data, error: queryError } = await supabase.from("website_settings").select("key,value,updated_at").in("key", [...knownKeys]);
+  const { error, supabase, session } = requireAdmin(request); if (error || !supabase) return error;
+  const keys=readableKeys(session);
+  if(!keys.length)return NextResponse.json({settings:{}});
+  const { data, error: queryError } = await supabase.from("website_settings").select("key,value,updated_at").in("key", keys);
   if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
   const settings = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   return NextResponse.json({ settings });
