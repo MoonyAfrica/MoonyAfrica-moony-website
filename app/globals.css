@@ -76,29 +76,29 @@ summary::-webkit-details-marker { display: none; }
 .hero-mission {
   background-image:
     linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.96) 31%, rgba(255,248,240,.72) 43%, rgba(255,248,240,.10) 65%),
-    url('/images/mission-hero.jpg');
-  background-position: center, 65% center;
+    var(--moony-page-hero-image, url('/images/mission-hero.jpg'));
+  background-position: center, var(--moony-page-hero-position, 65% center);
 }
 .hero-approach {
   background-image:
     linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.69) 44%, rgba(255,248,240,.09) 65%),
     linear-gradient(90deg, rgba(214,155,112,.08), rgba(111,70,48,.12)),
-    url('/images/home-hero.jpg');
-  background-position: center, center, 68% center;
+    var(--moony-page-hero-image, url('/images/home-hero.jpg'));
+  background-position: center, center, var(--moony-page-hero-position, 68% center);
 }
 .hero-about {
   background-image:
     linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 32%, rgba(255,248,240,.70) 45%, rgba(255,248,240,.11) 65%),
     linear-gradient(90deg, rgba(215,165,125,.05), rgba(133,82,59,.10)),
-    url('/images/home-hero.jpg');
-  background-position: center, center, 61% center;
+    var(--moony-page-hero-image, url('/images/home-hero.jpg'));
+  background-position: center, center, var(--moony-page-hero-position, 61% center);
 }
 .hero-community {
   background-image:
     linear-gradient(90deg, rgba(255,248,240,.995) 0%, rgba(255,248,240,.95) 31%, rgba(255,248,240,.67) 43%, rgba(255,248,240,.07) 64%),
     linear-gradient(90deg, rgba(216,160,116,.04), rgba(116,71,48,.08)),
-    url('/images/home-hero.jpg');
-  background-position: center, center, 65% center;
+    var(--moony-page-hero-image, url('/images/home-hero.jpg'));
+  background-position: center, center, var(--moony-page-hero-position, 65% center);
 }
 
 .admin-shadow { box-shadow: 0 10px 30px rgba(70, 36, 24, .05); }
@@ -116,7 +116,8 @@ summary::-webkit-details-marker { display: none; }
 
 @media (max-width: 1199px) {
   .hero-home { background-position: center, center, var(--moony-home-hero-position); }
-  .hero-mission, .hero-approach, .hero-about, .hero-community { background-position: center, center, 67% center; }
+  .hero-mission { background-position: center, var(--moony-page-hero-position, 67% center); }
+  .hero-approach, .hero-about, .hero-community { background-position: center, center, var(--moony-page-hero-position, 67% center); }
 }
 
 @media (max-width: 767px) {
@@ -126,10 +127,6 @@ summary::-webkit-details-marker { display: none; }
       var(--moony-home-hero-image);
     background-position: center, var(--moony-home-hero-position);
   }
-  .hero-mission,
-  .hero-approach,
-  .hero-about,
-  .hero-community {
-    background-position: center, 72% center;
-  }
+  .hero-mission { background-position: center, var(--moony-page-hero-position, 72% center); }
+  .hero-approach, .hero-about, .hero-community { background-position: center, center, var(--moony-page-hero-position, 72% center); }
 }
