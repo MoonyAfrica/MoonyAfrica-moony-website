@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import type { CmsSection } from "@/lib/cms-types";
 
 export type CmsHero = {
   eyebrow?: string;
@@ -17,7 +18,7 @@ export type PublishedPage = {
   seo_title: string | null;
   seo_description: string | null;
   hero: CmsHero;
-  sections: unknown[];
+  sections: CmsSection[];
   updated_at: string;
 };
 
