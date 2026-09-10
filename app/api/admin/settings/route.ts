@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-api";
+import { requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import type { AdminPermission } from "@/lib/admin-auth";
 
 const knownKeys = ["general","integrations","privacy","branding","pricing","seo","navigation","footer"] as const;
 
+function writePermission(keys: string[]): AdminPermission {
+  if (keys.every((key) => ["navigation","footer","branding"].includes(key))) return "site.write";
+  if (keys.every((key) => key === "seo")) return "seo.write";
+  return "settings.write";
+}
+
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
+  const { error, supabase } = requireAdmin(request, "settings.read"); if (error || !supabase) return error;
   const { data, error: queryError } = await supabase.from("website_settings").select("key,value,updated_at").in("key", [...knownKeys]);
   if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
   const settings = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
@@ -12,10 +19,11 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
   let body: Record<string, unknown>; try { body = await request.json(); } catch { return NextResponse.json({ error: "Requête invalide." }, { status: 400 }); }
   const keys = knownKeys.filter((key) => key in body);
   if (!keys.length) return NextResponse.json({ error: "Aucun réglage à enregistrer." }, { status: 422 });
+
+  const { error, supabase, session } = requireAdmin(request, writePermission(keys)); if (error || !supabase) return error;
   const { data: existing, error: readError } = await supabase.from("website_settings").select("key,value").in("key", [...keys]);
   if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
   const existingMap = Object.fromEntries((existing ?? []).map((row) => [row.key, row.value]));
@@ -27,5 +35,6 @@ export async function PATCH(request: Request) {
   });
   const { error: upsertError } = await supabase.from("website_settings").upsert(rows, { onConflict: "key" });
   if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "settings.updated", "website_settings", keys.join(","), `Réglages modifiés : ${keys.join(", ")}`, { keys });
   return NextResponse.json({ ok: true, updatedAt: current });
 }
