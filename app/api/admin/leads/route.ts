@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 import type { AdminSession } from "@/lib/admin-auth";
+import { triggerAutomationEvent } from "@/lib/automation-engine";
 
 const statuses = new Set(["new","to_contact","contacted","appointment","proposal","negotiation","won","lost"]);
 const needs = new Set(["demonstration","rappel","professionnel","partenariat","entreprise","presse","carriere","confidentialite","protections","legal","autre"]);
@@ -48,6 +49,16 @@ export async function POST(request: Request) {
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   await logActivity(supabase, data.id, "Lead créé", `Source : ${data.source || "Control Center"}`, session);
   await writeAuditLog(supabase, session, "crm.lead_created", "lead", data.id, `${firstName} ${lastName} ajouté au CRM`, { status, need, company: data.company ?? null });
+  void triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
+    lead_id: data.id,
+    lead: data.company || `${data.first_name} ${data.last_name}`,
+    first_name: data.first_name,
+    last_name: data.last_name,
+    company: data.company,
+    email: data.email,
+    status: data.status,
+    assigned_to: data.assigned_to,
+  }).catch(() => undefined);
   return NextResponse.json({ lead:data }, { status:201 });
 }
 
