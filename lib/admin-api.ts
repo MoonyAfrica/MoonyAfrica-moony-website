@@ -2,6 +2,32 @@ import { NextResponse } from "next/server";
 import { getAdminSession, hasAdminPermission, isAdminAuthConfigured, type AdminPermission, type AdminSession } from "@/lib/admin-auth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+function csrfError(request: Request) {
+  if (["GET", "HEAD", "OPTIONS"].includes(request.method.toUpperCase())) return null;
+
+  const origin = request.headers.get("origin");
+  const fetchSite = request.headers.get("sec-fetch-site");
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+  const host = forwardedHost || request.headers.get("host") || new URL(request.url).host;
+
+  if (fetchSite === "cross-site") {
+    return NextResponse.json({ error: "Requête externe refusée par la protection de sécurité du Control Center." }, { status: 403 });
+  }
+
+  if (origin) {
+    try {
+      const originHost = new URL(origin).host;
+      if (!originHost || originHost !== host) {
+        return NextResponse.json({ error: "Origine de requête non autorisée." }, { status: 403 });
+      }
+    } catch {
+      return NextResponse.json({ error: "Origine de requête invalide." }, { status: 403 });
+    }
+  }
+
+  return null;
+}
+
 export function requireAdmin(request: Request, permission?: AdminPermission) {
   if (!isAdminAuthConfigured()) {
     return { error: NextResponse.json({ error: "Le Control Center doit être sécurisé avant d’activer les écritures." }, { status: 503 }), supabase: null, session: null };
@@ -12,6 +38,10 @@ export function requireAdmin(request: Request, permission?: AdminPermission) {
   }
   if (!hasAdminPermission(session, permission)) {
     return { error: NextResponse.json({ error: "Vous n’avez pas les droits nécessaires pour cette action." }, { status: 403 }), supabase: null, session };
+  }
+  const csrf = csrfError(request);
+  if (csrf) {
+    return { error: csrf, supabase: null, session };
   }
   const supabase = getSupabaseAdmin();
   if (!supabase) {
