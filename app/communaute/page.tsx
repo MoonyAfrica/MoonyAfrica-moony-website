@@ -1,7 +1,8 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { CalendarDays, Heart, Sprout, Users } from "lucide-react";
 import { PublicFooter } from "@/components/public-footer";
 import { PublicHeader } from "@/components/public-header";
+import { getPublishedPage } from "@/lib/cms";
 import { siteConfig } from "@/lib/site-config";
 
 const pillars = [
@@ -11,16 +12,33 @@ const pillars = [
   { title: "Événements & ateliers", body: "Rencontres, conversations et contenus pour apprendre ensemble.", icon: CalendarDays },
 ];
 
-export default function CommunityPage() {
+const fallbackHero = {
+  title: "Une communauté\npensée pour écouter,\npartager et avancer\nensemble.",
+  body: "Avec Entre elles, MOONY offre un espace bienveillant où les femmes peuvent échanger, poser leurs questions, trouver du soutien et accéder à des ressources adaptées à chaque étape de leur vie.",
+  primaryLabel: "Rejoindre la communauté",
+};
+
+export async function generateMetadata(): Promise<Metadata> {
+  const page = await getPublishedPage("/communaute");
+  return {
+    title: page?.seo_title || "Communauté — MOONY Africa",
+    description: page?.seo_description || page?.hero?.body || fallbackHero.body,
+  };
+}
+
+export default async function CommunityPage() {
+  const page = await getPublishedPage("/communaute");
+  const hero = page?.hero ?? {};
   return (
     <main className="min-h-screen bg-[#fffaf4] text-[#5b2f22]">
       <section className="hero-photo hero-community moony-grain relative min-h-[700px] overflow-hidden">
         <PublicHeader active="Communauté" />
         <div className="relative z-10 mx-auto flex min-h-[700px] max-w-[1660px] items-center px-5 pb-10 pt-36 sm:px-8 lg:px-12">
           <div className="max-w-[610px]">
-            <h1 className="moony-serif text-[54px] leading-[.96] tracking-[-.048em] sm:text-[66px] lg:text-[76px]">Une communauté<br />pensée pour écouter,<br />partager et avancer<br />ensemble.</h1>
-            <p className="mt-6 max-w-[535px] text-[17px] leading-[1.5] text-[#5b2f22]/82">Avec Entre elles, MOONY offre un espace bienveillant où les femmes peuvent échanger, poser leurs questions, trouver du soutien et accéder à des ressources adaptées à chaque étape de leur vie.</p>
-            <a href={siteConfig.appUrl} className="mt-8 inline-flex rounded-full bg-[#853718] px-8 py-3.5 text-[14px] font-medium text-white shadow-[0_12px_34px_rgba(91,47,34,.09)] transition hover:-translate-y-[1px]">Rejoindre la communauté</a>
+            {hero.eyebrow ? <p className="mb-4 text-[11px] font-semibold uppercase tracking-[.3em] text-[#9d4c27]">{hero.eyebrow}</p> : null}
+            <h1 className="moony-serif whitespace-pre-line text-[54px] leading-[.96] tracking-[-.048em] sm:text-[66px] lg:text-[76px]">{hero.title || fallbackHero.title}</h1>
+            <p className="mt-6 max-w-[535px] text-[17px] leading-[1.5] text-[#5b2f22]/82">{hero.body || fallbackHero.body}</p>
+            <a href={hero.primaryHref || siteConfig.appUrl} className="mt-8 inline-flex rounded-full bg-[#853718] px-8 py-3.5 text-[14px] font-medium text-white shadow-[0_12px_34px_rgba(91,47,34,.09)] transition hover:-translate-y-[1px]">{hero.primaryLabel || fallbackHero.primaryLabel}</a>
           </div>
           <div className="pointer-events-none absolute right-[7%] top-[18%] hidden max-w-[245px] rotate-[-4deg] text-center xl:block"><p className="moony-serif text-[26px] italic leading-[1.2] text-[#7a4029]/72">Des femmes qui se soutiennent vont plus loin.</p><span className="mx-auto mt-5 block h-px w-10 bg-[#7a4029]/45" /></div>
         </div>
