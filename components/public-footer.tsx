@@ -19,6 +19,7 @@ const columns = [
     links: [
       ["Protection des données", "/confidentialite"],
       ["Sécurité", "/confidentialite#securite"],
+      ["Service client", "/support"],
       ["Méthode & qualité", "/notre-approche"],
       ["Professionnels de santé", "/services#professionnels"],
     ],
