@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { triggerAutomationEvent } from "@/lib/automation-engine";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const allowedNeeds = new Set([
@@ -68,13 +69,24 @@ export async function POST(request: Request) {
         referer: request.headers.get("referer"),
       },
     })
-    .select("id")
+    .select("id,status,assigned_to")
     .single();
 
   if (error) {
     console.error("MOONY lead insert failed", error);
     return NextResponse.json({ error: "Impossible d’enregistrer votre demande pour le moment." }, { status: 500 });
   }
+
+  void triggerAutomationEvent(supabase, "new_lead", "lead", data.id, {
+    lead_id: data.id,
+    lead: company || `${firstName} ${lastName}`,
+    first_name: firstName,
+    last_name: lastName,
+    company,
+    email,
+    status: data.status || "new",
+    assigned_to: data.assigned_to,
+  }).catch(() => undefined);
 
   return NextResponse.json({ ok: true, leadId: data.id }, { status: 201 });
 }
