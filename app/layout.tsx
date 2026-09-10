@@ -21,10 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(baseUrl),
     applicationName: general.siteName || seo.organizationName,
-    title: {
-      default: seo.siteTitle,
-      template: seo.titleTemplate?.includes("%s") ? seo.titleTemplate : "%s | MOONY Africa",
-    },
+    title: seo.siteTitle,
     description: seo.defaultDescription,
     robots: {
       index: seo.allowIndexing,
