@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import { triggerAutomationEvent } from "@/lib/automation-engine";
 
 const statuses = new Set(["open", "in_progress", "waiting", "resolved", "closed"]);
 const priorities = new Set(["low", "normal", "high", "urgent"]);
@@ -47,6 +48,9 @@ export async function POST(request: Request) {
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   await supabase.from("support_ticket_messages").insert({ ticket_id: data.id, sender_kind: "agent", sender_name: assignedTo || "Équipe MOONY", body: message });
   await writeAuditLog(supabase, session, "support.ticket_created", "support_ticket", data.id, `Ticket « ${subject} » créé`, { priority, type, requesterEmail: email });
+  if (data.priority === "urgent") {
+    void triggerAutomationEvent(supabase, "urgent_ticket", "support_ticket", data.id, { ticket_id:data.id, subject:data.subject, requester:data.requester_name || data.requester_email, priority:data.priority, status:data.status }).catch(() => undefined);
+  }
   return NextResponse.json({ ticket: data }, { status: 201 });
 }
 
@@ -69,5 +73,8 @@ export async function PATCH(request: Request) {
   const { data, error: updateError } = await supabase.from("support_tickets").update(patch).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   await writeAuditLog(supabase, session, "support.ticket_updated", "support_ticket", id, `Ticket « ${data.subject} » modifié`, { previousStatus: before?.status ?? null, status: data.status, previousPriority: before?.priority ?? null, priority: data.priority, assignedTo: data.assigned_to ?? null });
+  if (data.priority === "urgent" && before?.priority !== "urgent") {
+    void triggerAutomationEvent(supabase, "urgent_ticket", "support_ticket", data.id, { ticket_id:data.id, subject:data.subject, requester:data.requester_name || data.requester_email, priority:data.priority, status:data.status }).catch(() => undefined);
+  }
   return NextResponse.json({ ticket: data });
 }
