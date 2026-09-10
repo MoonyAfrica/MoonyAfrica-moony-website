@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
 const kinds = new Set(["note", "call", "email", "whatsapp", "meeting", "status", "proposal", "system"]);
 
@@ -8,7 +8,7 @@ async function parseBody(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "crm.read");
   if (error || !supabase) return error;
   const leadId = new URL(request.url).searchParams.get("leadId")?.trim() || "";
   if (!leadId) return NextResponse.json({ error: "Lead manquant." }, { status: 422 });
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "crm.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     summary,
     body: asNullableText(body.body, 6000),
     outcome: asNullableText(body.outcome, 240),
-    created_by: asNullableText(body.createdBy, 180) || "Équipe MOONY",
+    created_by: session?.name || session?.email || asNullableText(body.createdBy, 180) || "Équipe MOONY",
     metadata: typeof body.metadata === "object" && body.metadata ? body.metadata : {},
   }).select("*").single();
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
@@ -47,15 +47,18 @@ export async function POST(request: Request) {
   const leadPatch: Record<string, unknown> = { updated_at: now };
   if (contactKinds.has(kind)) leadPatch.last_contacted_at = now;
   await supabase.from("website_leads").update(leadPatch).eq("id", leadId);
+  await writeAuditLog(supabase, session, "crm.activity_created", "crm_activity", data.id, summary, { leadId, kind });
   return NextResponse.json({ activity: data }, { status: 201 });
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "crm.write");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id")?.trim() || "";
   if (!id) return NextResponse.json({ error: "Activité manquante." }, { status: 422 });
+  const { data: before } = await supabase.from("website_crm_activities").select("lead_id,kind,summary").eq("id", id).maybeSingle();
   const { error: deleteError } = await supabase.from("website_crm_activities").delete().eq("id", id);
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  await writeAuditLog(supabase, session, "crm.activity_deleted", "crm_activity", id, before?.summary || "Activité CRM supprimée", { leadId: before?.lead_id ?? null, kind: before?.kind ?? null });
   return NextResponse.json({ ok: true });
 }
