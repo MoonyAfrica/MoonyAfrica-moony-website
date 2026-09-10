@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
   BarChart3,
   CalendarClock,
+  Check,
   CheckCircle2,
   Clock3,
   FileText,
   KeyRound,
+  Loader2,
   Megaphone,
   MessageSquareText,
+  RefreshCw,
   ShieldCheck,
+  UserCheck,
   UsersRound,
 } from "lucide-react";
 import { AdminShell } from "@/components/admin-shell";
@@ -53,6 +57,18 @@ type Dashboard = {
   teamSummary: { available: boolean; total: number; active: number; withoutMfa: number; mustChangePassword: number; activeSessions: number };
 };
 
+type ActionCard = {
+  key: string;
+  title: string;
+  detail: string;
+  action: string;
+  href: string;
+  endpoint?: string;
+  body?: Record<string, unknown>;
+  permission?: string;
+  confirmText?: string;
+};
+
 const empty: Dashboard = {
   viewer: null,
   permissions: [],
@@ -84,26 +100,47 @@ const roleCopy: Record<string, string> = {
   analytics: "Consultez les tendances de trafic et les indicateurs utiles à la prise de décision.",
 };
 
-function money(value: number) { return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value); }
-function taskLead(task: Task) { const relation = task.website_leads; return Array.isArray(relation) ? relation[0] : relation ?? null; }
-function taskDate(value: string | null) { if (!value) return "Sans échéance"; return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value)); }
-function shortDate(value: string) { return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" }).format(new Date(value)); }
+function money(value: number) {
+  return new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
+}
+
+function taskLead(task: Task) {
+  const relation = task.website_leads;
+  return Array.isArray(relation) ? relation[0] : relation ?? null;
+}
+
+function taskDate(value: string | null) {
+  if (!value) return "Sans échéance";
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function shortDate(value: string) {
+  return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short" }).format(new Date(value));
+}
 
 export default function AdminDashboard() {
   const [data, setData] = useState<Dashboard>(empty);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busyAction, setBusyAction] = useState("");
 
-  useEffect(() => {
-    void (async () => {
-      const response = await fetch("/api/admin/dashboard", { cache: "no-store" });
-      if (response.status === 401) { location.href = "/admin/login"; return; }
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) { setError(payload.error ?? "Le Dashboard n’a pas pu être chargé."); setLoading(false); return; }
-      setData({ ...empty, ...payload, viewer: payload.viewer ?? null, tasks: payload.tasks ?? [], tasksAvailable: payload.tasksAvailable ?? true });
+  const loadDashboard = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    const response = await fetch("/api/admin/dashboard", { cache: "no-store" });
+    if (response.status === 401) { location.href = "/admin/login"; return; }
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(payload.error ?? "Le Dashboard n’a pas pu être chargé.");
       setLoading(false);
-    })();
+      return;
+    }
+    setData({ ...empty, ...payload, viewer: payload.viewer ?? null, tasks: payload.tasks ?? [], tasksAvailable: payload.tasksAvailable ?? true });
+    setError("");
+    setLoading(false);
   }, []);
+
+  useEffect(() => { void loadDashboard(); }, [loadDashboard]);
 
   const permissions = data.viewer?.permissions?.length ? data.viewer.permissions : data.permissions;
   const has = (permission: string) => permissions.includes("*") || permissions.includes(permission);
@@ -119,38 +156,8 @@ export default function AdminDashboard() {
     const max = Math.max(1, ...data.daily.map((item) => item.views));
     return data.daily.map((item, index) => `${(index / Math.max(1, data.daily.length - 1)) * 800},${225 - (item.views / max) * 185}`).join(" ");
   }, [data.daily]);
+
   const countryTotal = data.countries.reduce((sum, item) => sum + item.value, 0);
-
-  const quickActions = useMemo(() => {
-    const actions: { label: string; href: string }[] = [];
-    const can = (permission: string) => permissions.includes("*") || permissions.includes(permission);
-    if (can("crm.write")) actions.push({ label: "Ouvrir le CRM", href: "/admin/crm" });
-    if (can("appointments.write")) actions.push({ label: "Planifier un RDV", href: "/admin/rendez-vous" });
-    if (can("marketing.write")) actions.push({ label: "Nouvelle campagne", href: "/admin/newsletters" });
-    if (can("content.write")) actions.push({ label: "Nouvel article", href: "/admin/articles" });
-    if (can("site.write")) actions.push({ label: "Modifier une page", href: "/admin/pages" });
-    if (can("support.write")) actions.push({ label: "Boîte de réception", href: "/admin/service-client" });
-    if (can("team.manage")) actions.push({ label: "Gérer l’équipe", href: "/admin/equipe" });
-    return actions.slice(0, 4);
-  }, [permissions]);
-
-  const priorities = useMemo(() => {
-    const items: { level: "urgent" | "attention" | "normal"; title: string; detail: string; href: string }[] = [];
-    const can = (permission: string) => permissions.includes("*") || permissions.includes(permission);
-    const current = Date.now();
-    const late = data.tasks.filter((task) => task.due_at && new Date(task.due_at).getTime() < current).length;
-    if (can("crm.read") && late) items.push({ level: "urgent", title: `${late} relance${late > 1 ? "s" : ""} en retard`, detail: "Des prospects attendent une action commerciale.", href: "/admin/crm" });
-    if (can("crm.read") && data.leadSummary.new) items.push({ level: "attention", title: `${data.leadSummary.new} nouveau${data.leadSummary.new > 1 ? "x" : ""} prospect${data.leadSummary.new > 1 ? "s" : ""}`, detail: "À qualifier ou contacter dans le pipeline.", href: "/admin/crm" });
-    if (can("support.read") && data.supportSummary.urgent) items.push({ level: "urgent", title: `${data.supportSummary.urgent} ticket${data.supportSummary.urgent > 1 ? "s" : ""} urgent${data.supportSummary.urgent > 1 ? "s" : ""}`, detail: "Priorité au service client.", href: "/admin/service-client" });
-    if (can("support.read") && !data.supportSummary.urgent && data.supportSummary.open) items.push({ level: "attention", title: `${data.supportSummary.open} demande${data.supportSummary.open > 1 ? "s" : ""} ouverte${data.supportSummary.open > 1 ? "s" : ""}`, detail: "Messages encore en attente de résolution.", href: "/admin/service-client" });
-    if (can("appointments.read") && appointmentsToday.length) items.push({ level: "normal", title: `${appointmentsToday.length} rendez-vous aujourd’hui`, detail: "Votre agenda mérite un dernier contrôle.", href: "/admin/rendez-vous" });
-    const contentDrafts = data.contentSummary.pagesDraft + data.contentSummary.articlesDraft + data.contentSummary.resourcesDraft;
-    if ((can("site.read") || can("content.read")) && contentDrafts) items.push({ level: "attention", title: `${contentDrafts} contenu${contentDrafts > 1 ? "s" : ""} à finaliser`, detail: "Brouillons ou éléments en révision avant publication.", href: can("site.read") ? "/admin/pages" : "/admin/articles" });
-    if (can("marketing.read") && data.marketingSummary.campaignsScheduled) items.push({ level: "normal", title: `${data.marketingSummary.campaignsScheduled} campagne${data.marketingSummary.campaignsScheduled > 1 ? "s" : ""} programmée${data.marketingSummary.campaignsScheduled > 1 ? "s" : ""}`, detail: "Vérifiez contenu, audience et date d’envoi.", href: "/admin/newsletters" });
-    if (can("team.manage") && data.teamSummary.withoutMfa) items.push({ level: "attention", title: `${data.teamSummary.withoutMfa} compte${data.teamSummary.withoutMfa > 1 ? "s" : ""} sans 2FA`, detail: "Renforcez les accès de l’équipe.", href: "/admin/equipe" });
-    if (can("team.manage") && data.teamSummary.mustChangePassword) items.push({ level: "normal", title: `${data.teamSummary.mustChangePassword} mot${data.teamSummary.mustChangePassword > 1 ? "s" : ""} de passe temporaire${data.teamSummary.mustChangePassword > 1 ? "s" : ""}`, detail: "Des membres doivent encore choisir leur mot de passe personnel.", href: "/admin/equipe" });
-    return items.slice(0, 6);
-  }, [data, permissions, appointmentsToday.length]);
 
   const metricCards = useMemo(() => {
     const cards: { label: string; value: string | number; note: string }[] = [];
@@ -162,7 +169,7 @@ export default function AdminDashboard() {
       cards.push({ label: "Pages publiées", value: data.contentSummary.pagesPublished, note: "en ligne" }, { label: "Articles à finaliser", value: data.contentSummary.articlesDraft, note: "brouillon / révision" });
     }
     if (viewerRole === "marketing" && can("marketing.read")) {
-      cards.push({ label: "Activations en ligne", value: data.marketingSummary.activeElements, note: "pop-ups, bandeaux, formulaires" }, { label: "Campagnes programmées", value: data.marketingSummary.campaignsScheduled, note: "à venir" });
+      cards.push({ label: "Activations en ligne", value: data.marketingSummary.activeElements, note: "pop-ups et bandeaux" }, { label: "Campagnes programmées", value: data.marketingSummary.campaignsScheduled, note: "à venir" });
     }
     if (can("analytics.read")) cards.push({ label: "Pages vues", value: data.metrics.pageViews, note: "30 derniers jours" }, { label: "Clics application", value: data.metrics.appClicks, note: "30 derniers jours" });
     if (can("crm.read")) cards.push({ label: "Prospects actifs", value: data.leadSummary.total, note: `${data.leadSummary.new} nouveaux / à contacter` });
@@ -171,56 +178,235 @@ export default function AdminDashboard() {
     return cards.slice(0, 5);
   }, [data, permissions, viewerRole]);
 
+  const actionCards = useMemo<ActionCard[]>(() => {
+    const actions: ActionCard[] = [];
+    const nextTask = overdueTasks[0] ?? data.tasks[0];
+    if (nextTask && has("crm.write")) {
+      const lead = taskLead(nextTask);
+      actions.push({
+        key: `task-${nextTask.id}`,
+        title: nextTask.title,
+        detail: `${lead?.company || (lead ? `${lead.first_name} ${lead.last_name}` : "Prospect")} · ${taskDate(nextTask.due_at)}`,
+        action: "Marquer terminée",
+        href: `/admin/crm?lead=${nextTask.lead_id}`,
+        endpoint: "/api/admin/crm/tasks",
+        body: { id: nextTask.id, status: "done" },
+        permission: "crm.write",
+      });
+    }
+
+    const lead = data.leads.find((item) => item.status === "new" || item.status === "to_contact");
+    if (lead && has("crm.write")) {
+      actions.push({
+        key: `lead-${lead.id}`,
+        title: lead.company || `${lead.first_name} ${lead.last_name}`,
+        detail: `${lead.email}${lead.country ? ` · ${lead.country}` : ""}`,
+        action: "Marquer contacté",
+        href: `/admin/crm?lead=${lead.id}`,
+        endpoint: "/api/admin/leads",
+        body: { id: lead.id, status: "contacted", markContacted: true },
+        permission: "crm.write",
+      });
+    }
+
+    const ticket = data.tickets.find((item) => item.priority === "urgent" && !["resolved", "closed"].includes(item.status))
+      ?? data.tickets.find((item) => !["resolved", "closed"].includes(item.status));
+    if (ticket && has("support.write")) {
+      actions.push({
+        key: `ticket-${ticket.id}`,
+        title: ticket.subject,
+        detail: `${ticket.requester_name || ticket.requester_email} · ${ticket.priority}`,
+        action: ticket.status === "open" ? "Prendre en charge" : "Résoudre",
+        href: `/admin/service-client?ticket=${ticket.id}`,
+        endpoint: "/api/admin/support",
+        body: ticket.status === "open"
+          ? { id: ticket.id, status: "in_progress", assignedTo: data.viewer?.name || data.viewer?.email || "Équipe MOONY" }
+          : { id: ticket.id, status: "resolved" },
+        permission: "support.write",
+        confirmText: ticket.status === "open" ? undefined : "Confirmer la résolution de ce ticket ?",
+      });
+    }
+
+    const article = data.articles.find((item) => item.status === "review") ?? data.articles.find((item) => item.status === "draft");
+    if (article && has("content.write")) {
+      actions.push({
+        key: `article-${article.id}`,
+        title: article.title,
+        detail: `Article · ${article.status} · modifié le ${shortDate(article.updated_at)}`,
+        action: "Publier",
+        href: "/admin/articles",
+        endpoint: "/api/admin/articles",
+        body: { id: article.id, status: "published" },
+        permission: "content.write",
+        confirmText: `Publier maintenant l’article « ${article.title} » ?`,
+      });
+    }
+
+    const page = data.pages.find((item) => item.status === "draft");
+    if (page && has("site.write")) {
+      actions.push({
+        key: `page-${page.id}`,
+        title: page.title,
+        detail: `Page ${page.slug} · brouillon`,
+        action: "Publier la page",
+        href: "/admin/pages",
+        endpoint: "/api/admin/pages",
+        body: { id: page.id, status: "published" },
+        permission: "site.write",
+        confirmText: `Publier maintenant la page « ${page.title} » ?`,
+      });
+    }
+    return actions.slice(0, 5);
+  }, [data, overdueTasks, permissions]);
+
+  const priorities = useMemo(() => {
+    const items: { level: "urgent" | "attention" | "normal"; title: string; detail: string; href: string }[] = [];
+    const can = (permission: string) => permissions.includes("*") || permissions.includes(permission);
+    if (can("crm.read") && overdueTasks.length) items.push({ level: "urgent", title: `${overdueTasks.length} relance${overdueTasks.length > 1 ? "s" : ""} en retard`, detail: "Des prospects attendent une action commerciale.", href: "/admin/crm" });
+    if (can("crm.read") && data.leadSummary.new) items.push({ level: "attention", title: `${data.leadSummary.new} nouveau${data.leadSummary.new > 1 ? "x" : ""} prospect${data.leadSummary.new > 1 ? "s" : ""}`, detail: "À qualifier ou contacter dans le pipeline.", href: "/admin/crm" });
+    if (can("support.read") && data.supportSummary.urgent) items.push({ level: "urgent", title: `${data.supportSummary.urgent} ticket${data.supportSummary.urgent > 1 ? "s" : ""} urgent${data.supportSummary.urgent > 1 ? "s" : ""}`, detail: "Priorité au service client.", href: "/admin/service-client" });
+    if (can("appointments.read") && appointmentsToday.length) items.push({ level: "normal", title: `${appointmentsToday.length} rendez-vous aujourd’hui`, detail: "Votre agenda mérite un dernier contrôle.", href: "/admin/rendez-vous" });
+    const contentDrafts = data.contentSummary.pagesDraft + data.contentSummary.articlesDraft + data.contentSummary.resourcesDraft;
+    if ((can("site.read") || can("content.read")) && contentDrafts) items.push({ level: "attention", title: `${contentDrafts} contenu${contentDrafts > 1 ? "s" : ""} à finaliser`, detail: "Brouillons ou éléments en révision avant publication.", href: can("site.read") ? "/admin/pages" : "/admin/articles" });
+    if (can("team.manage") && data.teamSummary.withoutMfa) items.push({ level: "attention", title: `${data.teamSummary.withoutMfa} compte${data.teamSummary.withoutMfa > 1 ? "s" : ""} sans 2FA`, detail: "Renforcez les accès de l’équipe.", href: "/admin/equipe" });
+    return items.slice(0, 6);
+  }, [data, permissions, overdueTasks.length, appointmentsToday.length]);
+
+  async function runAction(card: ActionCard) {
+    if (!card.endpoint || !card.body) return;
+    if (card.permission && !has(card.permission)) return;
+    if (card.confirmText && !window.confirm(card.confirmText)) return;
+
+    setBusyAction(card.key);
+    setNotice("");
+    setError("");
+    const response = await fetch(card.endpoint, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(card.body),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setError(payload.error ?? "L’action n’a pas pu être exécutée.");
+      setBusyAction("");
+      return;
+    }
+    setNotice(`Action effectuée : ${card.action}.`);
+    await loadDashboard(true);
+    setBusyAction("");
+  }
+
   return (
     <AdminShell active="Dashboard">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#f2e2d7] px-3 py-1 text-[10px] font-semibold uppercase tracking-[.12em] text-[#8a3d20]">{roleNames[viewerRole] ?? viewerRole}</span>
-            {data.viewer?.mfa ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] text-emerald-700"><ShieldCheck size={11}/>2FA validée</span> : null}
+            <span className="rounded-full bg-[#f0dfd4] px-3 py-1 text-[10px] font-semibold uppercase tracking-[.13em] text-[#7e3518]">{roleNames[viewerRole] ?? viewerRole}</span>
+            {data.viewer?.mfa ? <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] text-emerald-700"><ShieldCheck size={12}/> 2FA actif</span> : null}
           </div>
           <h1 className="moony-serif text-4xl tracking-[-.035em] text-[#5b2f22]">Bonjour {firstName} ☀</h1>
           <p className="mt-1 max-w-3xl text-sm text-[#5b2f22]/50">{roleCopy[viewerRole] ?? roleCopy.admin}</p>
         </div>
-        <div className="flex flex-wrap gap-2">{quickActions.map((action, index) => <Link key={action.href} href={action.href} className={index === 0 ? "rounded-lg bg-[#7e3518] px-4 py-2.5 text-sm font-medium text-white" : "rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm"}>{action.label}</Link>)}</div>
+        <button onClick={() => void loadDashboard()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm text-[#5b2f22] transition hover:bg-[#fff9f4] disabled:opacity-50">
+          <RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Actualiser
+        </button>
       </div>
 
-      {error ? <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div> : null}
+      {error ? <div className="mt-5 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><AlertCircle size={16}/>{error}</div> : null}
+      {notice ? <div className="mt-5 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"><CheckCircle2 size={16}/>{notice}</div> : null}
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        {metricCards.map((card) => <article key={card.label} className="admin-card admin-shadow p-5"><p className="text-xs text-[#5b2f22]/52">{card.label}</p><strong className="moony-serif mt-3 block text-3xl font-normal">{loading ? "…" : card.value}</strong><p className="mt-1 text-[10px] text-[#5b2f22]/36">{card.note}</p></article>)}
+        {metricCards.map((card) => (
+          <article key={card.label} className="admin-card admin-shadow p-5">
+            <p className="text-xs text-[#5b2f22]/52">{card.label}</p>
+            <strong className="moony-serif mt-3 block text-3xl font-normal">{loading ? "…" : card.value}</strong>
+            <p className="mt-1 text-[10px] text-[#5b2f22]/36">{card.note}</p>
+          </article>
+        ))}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[.72fr_1.28fr]">
-        <article className="admin-card admin-shadow p-5">
-          <div className="flex items-center justify-between gap-3"><div><h2 className="moony-serif text-2xl">Priorités du jour</h2><p className="text-xs text-[#5b2f22]/45">Une vue triée selon votre rôle</p></div><span className="rounded-full bg-[#fbf1ea] px-2.5 py-1 text-[10px] text-[#8a3d20]">{priorities.length} à suivre</span></div>
-          <div className="mt-4 space-y-2">{priorities.length ? priorities.map((item) => <Link key={`${item.title}-${item.href}`} href={item.href} className="group flex items-start gap-3 rounded-xl border border-[#5b2f22]/8 bg-[#fffdfb] p-3 transition hover:border-[#9d4c27]/25 hover:bg-[#fffaf6]">{item.level === "urgent" ? <AlertCircle size={16} className="mt-0.5 shrink-0 text-red-500"/> : item.level === "attention" ? <Clock3 size={16} className="mt-0.5 shrink-0 text-amber-600"/> : <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600"/>}<div className="min-w-0 flex-1"><strong className="block text-xs">{item.title}</strong><span className="mt-1 block text-[10px] leading-4 text-[#5b2f22]/45">{item.detail}</span></div><ArrowRight size={14} className="mt-1 shrink-0 text-[#5b2f22]/25 transition group-hover:translate-x-0.5 group-hover:text-[#8a3d20]"/></Link>) : <div className="py-10 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500/60"/><p className="mt-2 text-xs font-medium">Rien d’urgent pour le moment.</p><p className="mt-1 text-[10px] text-[#5b2f22]/40">Le Dashboard fera remonter ici les prochaines actions utiles.</p></div>}</div>
-        </article>
+      {priorities.length ? (
+        <section className="mt-4 rounded-2xl border border-[#5b2f22]/9 bg-[#fffaf5] p-4 shadow-[0_12px_35px_rgba(91,47,34,.04)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div><h2 className="moony-serif text-2xl text-[#5b2f22]">Priorités du jour</h2><p className="text-[11px] text-[#5b2f22]/45">Ce qui mérite votre attention avant le reste.</p></div>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {priorities.map((item) => (
+              <Link key={`${item.title}-${item.href}`} href={item.href} className="group rounded-xl border border-[#5b2f22]/8 bg-white p-3 transition hover:-translate-y-[1px] hover:shadow-sm">
+                <div className="flex items-start gap-2.5">
+                  <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.level === "urgent" ? "bg-red-500" : item.level === "attention" ? "bg-amber-500" : "bg-emerald-500"}`}/>
+                  <div className="min-w-0"><strong className="block text-xs text-[#5b2f22]">{item.title}</strong><span className="mt-1 block text-[10px] leading-4 text-[#5b2f22]/44">{item.detail}</span></div>
+                  <ArrowRight size={14} className="ml-auto shrink-0 text-[#9d4c27] transition group-hover:translate-x-0.5"/>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
-        {has("analytics.read") ? <article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Performance du site</h2><p className="text-xs text-[#5b2f22]/45">Pages vues · 30 jours</p></div><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir les détails →</Link></div><div className="mt-5 h-64 rounded-lg border border-[#5b2f22]/8 bg-[#fffdf9] p-4"><svg viewBox="0 0 800 250" className="h-full w-full" preserveAspectRatio="none">{[40,80,120,160,200].map((y) => <line key={y} x1="0" x2="800" y1={y} y2={y} stroke="#eadfd8"/>)}<polyline fill="none" stroke="#8a3d20" strokeWidth="4" vectorEffect="non-scaling-stroke" points={points}/></svg></div><div className="mt-4 grid gap-3 sm:grid-cols-2"><div className="rounded-xl bg-[#fbf4ee] p-3"><span className="text-[10px] text-[#5b2f22]/45">Conversion visite → lead</span><strong className="moony-serif mt-1 block text-2xl font-normal">{data.metrics.conversionRate}%</strong></div><div className="rounded-xl bg-[#fbf4ee] p-3"><span className="text-[10px] text-[#5b2f22]/45">Pays suivis</span><strong className="moony-serif mt-1 block text-2xl font-normal">{data.countries.length}</strong></div></div></article> : <article className="admin-card admin-shadow grid min-h-[300px] place-items-center p-8 text-center"><div><BarChart3 size={34} className="mx-auto text-[#9d4c27]/40"/><h2 className="moony-serif mt-4 text-2xl">Votre espace de travail</h2><p className="mx-auto mt-2 max-w-md text-xs leading-5 text-[#5b2f22]/45">Les indicateurs affichés ici sont limités à votre périmètre métier. Utilisez les raccourcis ci-dessus pour accéder directement à vos outils.</p></div></article>}
+      <section className="mt-4 rounded-2xl border border-[#5b2f22]/9 bg-white p-5 shadow-[0_12px_35px_rgba(91,47,34,.05)]">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><h2 className="moony-serif text-2xl text-[#5b2f22]">Actions immédiates</h2><p className="mt-1 text-[11px] text-[#5b2f22]/45">Agissez sans quitter le Dashboard. Chaque action respecte vos permissions et reste journalisée.</p></div>
+          <span className="rounded-full bg-[#f8eee7] px-3 py-1 text-[10px] text-[#7e3518]">{actionCards.length} action{actionCards.length > 1 ? "s" : ""} disponible{actionCards.length > 1 ? "s" : ""}</span>
+        </div>
+        {actionCards.length ? (
+          <div className="mt-4 grid gap-3 md:grid-cols-2 2xl:grid-cols-5">
+            {actionCards.map((card) => (
+              <article key={card.key} className="flex min-h-[170px] flex-col rounded-xl border border-[#5b2f22]/9 bg-[#fffdf9] p-4">
+                <strong className="line-clamp-2 text-sm text-[#5b2f22]">{card.title}</strong>
+                <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-[#5b2f22]/45">{card.detail}</p>
+                <div className="mt-auto flex items-center gap-2 pt-4">
+                  <button onClick={() => void runAction(card)} disabled={busyAction === card.key} className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#7e3518] px-3 py-2 text-[11px] font-medium text-white transition hover:bg-[#652a14] disabled:cursor-wait disabled:opacity-60">
+                    {busyAction === card.key ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} {card.action}
+                  </button>
+                  <Link href={card.href} className="rounded-lg border border-[#5b2f22]/10 px-2.5 py-2 text-[11px] text-[#7e3518]" aria-label={`Ouvrir ${card.title}`}><ArrowRight size={13}/></Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : <div className="py-8 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500/60"/><p className="mt-2 text-xs text-[#5b2f22]/45">Rien d’urgent à exécuter depuis le Dashboard.</p></div>}
+      </section>
+
+      {has("analytics.read") ? (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.45fr_.75fr]">
+          <article className="admin-card admin-shadow p-5">
+            <div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Performance du site</h2><p className="text-xs text-[#5b2f22]/45">Pages vues · 30 jours</p></div><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir les détails →</Link></div>
+            <div className="mt-5 h-64 rounded-lg border border-[#5b2f22]/8 bg-[#fffdf9] p-4"><svg viewBox="0 0 800 250" className="h-full w-full" preserveAspectRatio="none">{[40,80,120,160,200].map((y) => <line key={y} x1="0" x2="800" y1={y} y2={y} stroke="#eadfd8"/>)}<polyline fill="none" stroke="#8a3d20" strokeWidth="4" vectorEffect="non-scaling-stroke" points={points}/></svg></div>
+          </article>
+          <article className="admin-card admin-shadow p-5">
+            <div className="flex items-center justify-between"><h2 className="moony-serif text-2xl">Audience par pays</h2><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir tout</Link></div>
+            <div className="mt-5 space-y-3">{data.countries.length ? data.countries.map((item) => <div key={item.name}><div className="flex justify-between text-xs"><span>{item.name}</span><strong>{countryTotal ? Math.round(item.value / countryTotal * 100) : 0}%</strong></div><div className="mt-1 h-2 rounded-full bg-[#f2e6de]"><div className="h-2 rounded-full bg-[#9d4c27]" style={{ width: `${countryTotal ? item.value / countryTotal * 100 : 0}%` }}/></div></div>) : <p className="py-12 text-center text-xs text-[#5b2f22]/42">Les pays apparaîtront dès que des visites seront enregistrées.</p>}</div>
+          </article>
+        </div>
+      ) : null}
+
+      {has("crm.read") ? (
+        <div className="mt-4 grid gap-4 2xl:grid-cols-[1.45fr_.55fr]">
+          <article className="admin-card admin-shadow p-4">
+            <div className="mb-3 flex items-center justify-between"><h2 className="moony-serif text-2xl">Pipeline commercial</h2><Link href="/admin/crm" className="text-xs text-[#8d3b19]">Ouvrir le CRM →</Link></div>
+            <div className="flex gap-2 overflow-x-auto pb-2">{stages.map(([status,label],index) => { const rows = data.leads.filter((item) => item.status === status); const total = rows.reduce((sum,item) => sum + Number(item.deal_value || 0), 0); return <div key={status} className={`min-w-[180px] flex-1 rounded-xl p-3 ${index === 6 ? "bg-[#e4f3e8]" : index === 7 ? "bg-[#f8e4e2]" : index >= 3 ? "bg-[#fbf0dd]" : "bg-[#f7eee8]"}`}><p className="text-xs font-semibold">{label} <span className="font-normal text-[#5b2f22]/40">({rows.length})</span></p><strong className="moony-serif mt-1 block text-xl font-normal">{money(total)}</strong><div className="mt-3 space-y-2">{rows.slice(0,3).map((lead) => <Link href={`/admin/crm?lead=${lead.id}`} key={lead.id} className="block rounded-lg bg-white px-3 py-2 text-[11px] shadow-sm transition hover:-translate-y-[1px]"><strong className="block truncate">{lead.company || `${lead.first_name} ${lead.last_name}`}</strong><span className="text-[#5b2f22]/45">{lead.country || "Pays non renseigné"}</span></Link>)}</div></div>; })}</div>
+          </article>
+          <article className="admin-card admin-shadow p-4">
+            <div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Relances commerciales</h2><p className="mt-0.5 text-[10px] text-[#5b2f22]/42">{overdueTasks.length} en retard</p></div><Link href="/admin/crm" className="text-xs text-[#8d3b19]">CRM →</Link></div>
+            {!data.tasksAvailable ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">Appliquez la migration Supabase des tâches CRM pour activer ce bloc.</div> : null}
+            <div className="mt-4 space-y-2">{data.tasks.length ? data.tasks.slice(0,6).map((task) => { const lead = taskLead(task); const late = Boolean(task.due_at && new Date(task.due_at).getTime() < Date.now()); return <div key={task.id} className={`rounded-xl border p-3 ${late ? "border-red-200 bg-red-50/45" : "border-[#5b2f22]/9 bg-white"}`}><div className="flex items-start gap-2">{late ? <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-500"/> : <Clock3 size={14} className="mt-0.5 shrink-0 text-[#9d4c27]"/>}<div className="min-w-0 flex-1"><Link href={`/admin/crm?lead=${task.lead_id}`} className="block truncate text-xs font-semibold">{task.title}</Link><span className={`mt-1 block text-[10px] ${late ? "text-red-600" : "text-[#5b2f22]/42"}`}>{taskDate(task.due_at)}</span><span className="mt-1 block truncate text-[10px] text-[#5b2f22]/42">{lead?.company || (lead ? `${lead.first_name} ${lead.last_name}` : "Prospect")}</span></div>{has("crm.write") ? <button onClick={() => void runAction({ key:`inline-task-${task.id}`, title:task.title, detail:"", action:"Terminée", href:"/admin/crm", endpoint:"/api/admin/crm/tasks", body:{id:task.id,status:"done"}, permission:"crm.write" })} disabled={busyAction === `inline-task-${task.id}`} className="rounded-md border border-[#5b2f22]/10 p-1.5 text-[#7e3518]" title="Marquer comme terminée">{busyAction === `inline-task-${task.id}` ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>}</button> : null}</div></div>; }) : <div className="py-8 text-center"><CheckCircle2 size={28} className="mx-auto text-emerald-500/60"/><p className="mt-2 text-xs text-[#5b2f22]/42">Aucune relance commerciale ouverte.</p></div>}</div>
+          </article>
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-4">
+        {has("appointments.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Prochains rendez-vous</h3><CalendarClock size={16} className="text-[#9d4c27]"/></div><div className="mt-3 space-y-2">{data.upcomingAppointments.length ? data.upcomingAppointments.slice(0,4).map((item) => <Link href={item.lead_id ? `/admin/crm?lead=${item.lead_id}` : "/admin/rendez-vous"} key={item.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block">{item.starts_at ? new Intl.DateTimeFormat("fr-FR", { dateStyle:"medium", timeStyle:"short" }).format(new Date(item.starts_at)) : "Date à préciser"}</strong><span className="text-[#5b2f22]/45">{item.provider || item.notes || "Rendez-vous"}</span></Link>) : <p className="py-6 text-xs text-[#5b2f22]/40">Aucun rendez-vous à venir.</p>}</div></article> : null}
+        {has("support.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Service client</h3><MessageSquareText size={16} className="text-[#9d4c27]"/></div><div className="mt-3 space-y-2">{data.tickets.slice(0,4).map((item) => <Link href={`/admin/service-client?ticket=${item.id}`} key={item.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block truncate">{item.subject}</strong><span className="text-[#5b2f22]/45">{item.requester_name || item.requester_email} · {item.status}</span></Link>)}{!data.tickets.length ? <p className="py-6 text-xs text-[#5b2f22]/40">Aucun ticket.</p> : null}</div></article> : null}
+        {has("marketing.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Marketing</h3><Megaphone size={16} className="text-[#9d4c27]"/></div><div className="mt-4 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.marketingSummary.activeElements}</strong><span className="text-[10px] text-[#5b2f22]/45">activations actives</span></div><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.marketingSummary.campaignsScheduled}</strong><span className="text-[10px] text-[#5b2f22]/45">campagnes prévues</span></div></div><Link href="/admin/marketing" className="mt-3 block text-center text-[10px] text-[#8d3b19]">Ouvrir le marketing →</Link></article> : null}
+        {(has("site.read") || has("content.read")) ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><h3 className="moony-serif text-xl">Contenus</h3><FileText size={16} className="text-[#9d4c27]"/></div><div className="mt-4 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.contentSummary.articlesDraft}</strong><span className="text-[10px] text-[#5b2f22]/45">articles à finaliser</span></div><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.contentSummary.pagesDraft}</strong><span className="text-[10px] text-[#5b2f22]/45">pages en brouillon</span></div></div><Link href={has("site.read") ? "/admin/pages" : "/admin/articles"} className="mt-3 block text-center text-[10px] text-[#8d3b19]">Gérer les contenus →</Link></article> : null}
       </div>
 
-      {has("analytics.read") && data.countries.length ? <div className="mt-4"><article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><h2 className="moony-serif text-2xl">Audience par pays</h2><Link href="/admin/analytics" className="text-xs text-[#8d3b19]">Voir tout</Link></div><div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{data.countries.map((item) => <div key={item.name}><div className="flex justify-between text-xs"><span>{item.name}</span><strong>{countryTotal ? Math.round(item.value / countryTotal * 100) : 0}%</strong></div><div className="mt-1 h-2 rounded-full bg-[#f2e6de]"><div className="h-2 rounded-full bg-[#9d4c27]" style={{ width: `${countryTotal ? item.value / countryTotal * 100 : 0}%` }}/></div></div>)}</div></article></div> : null}
-
-      {has("crm.read") ? <div className="mt-4 grid gap-4 2xl:grid-cols-[1.45fr_.55fr]">
-        <article className="admin-card admin-shadow p-4"><div className="mb-3 flex items-center justify-between"><h2 className="moony-serif text-2xl">Pipeline commercial</h2><Link href="/admin/crm" className="text-xs text-[#8d3b19]">Ouvrir le CRM →</Link></div><div className="flex gap-2 overflow-x-auto pb-2">{stages.map(([status,label],index) => { const rows = data.leads.filter((item) => item.status === status); const total = rows.reduce((sum,item) => sum + Number(item.deal_value || 0), 0); return <div key={status} className={`min-w-[180px] flex-1 rounded-xl p-3 ${index === 6 ? "bg-[#e4f3e8]" : index === 7 ? "bg-[#f8e4e2]" : index >= 3 ? "bg-[#fbf0dd]" : "bg-[#f7eee8]"}`}><p className="text-xs font-semibold">{label} <span className="font-normal text-[#5b2f22]/40">({rows.length})</span></p><strong className="moony-serif mt-1 block text-xl font-normal">{money(total)}</strong><div className="mt-3 space-y-2">{rows.slice(0,3).map((lead) => <Link href={`/admin/crm?lead=${lead.id}`} key={lead.id} className="block rounded-lg bg-white px-3 py-2 text-[11px] shadow-sm transition hover:-translate-y-[1px]"><strong className="block truncate">{lead.company || `${lead.first_name} ${lead.last_name}`}</strong><span className="text-[#5b2f22]/45">{lead.country || "Pays non renseigné"}</span></Link>)}</div></div>; })}</div></article>
-        <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Relances</h2><p className="mt-0.5 text-[10px] text-[#5b2f22]/42">{overdueTasks.length} en retard</p></div><Link href="/admin/crm" className="text-xs text-[#8d3b19]">CRM →</Link></div>{!data.tasksAvailable ? <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-800">Appliquez la migration CRM pour activer les tâches commerciales.</div> : null}<div className="mt-4 space-y-2">{data.tasks.length ? data.tasks.slice(0,6).map((task) => { const lead = taskLead(task); const late = Boolean(task.due_at && new Date(task.due_at).getTime() < now); return <Link key={task.id} href={`/admin/crm?lead=${task.lead_id}`} className={`block rounded-xl border p-3 transition hover:bg-[#fffaf6] ${late ? "border-red-200 bg-red-50/45" : "border-[#5b2f22]/9 bg-white"}`}><div className="flex items-start gap-2">{late ? <AlertCircle size={14} className="mt-0.5 shrink-0 text-red-500"/> : <Clock3 size={14} className="mt-0.5 shrink-0 text-[#9d4c27]"/>}<div className="min-w-0"><strong className="block truncate text-xs">{task.title}</strong><span className={`mt-1 block text-[10px] ${late ? "text-red-600" : "text-[#5b2f22]/42"}`}>{taskDate(task.due_at)}</span><span className="mt-1 block truncate text-[10px] text-[#5b2f22]/42">{lead?.company || lead ? `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim() : "Prospect"}</span></div></div></Link>; }) : <div className="py-8 text-center"><CheckCircle2 size={28} className="mx-auto text-emerald-500/60"/><p className="mt-2 text-xs text-[#5b2f22]/42">Aucune relance ouverte.</p></div>}</div></article>
-      </div> : null}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
-        {has("appointments.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><CalendarClock size={17} className="text-[#9d4c27]"/><h3 className="moony-serif text-xl">Prochains rendez-vous</h3></div><Link href="/admin/rendez-vous" className="text-[10px] text-[#8d3b19]">Voir tous</Link></div><div className="mt-3 space-y-2">{data.upcomingAppointments.length ? data.upcomingAppointments.slice(0,4).map((item) => <Link href={item.lead_id ? `/admin/crm?lead=${item.lead_id}` : "/admin/rendez-vous"} key={item.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block">{item.starts_at ? new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.starts_at)) : "Date à préciser"}</strong><span className="text-[#5b2f22]/45">{item.provider || item.notes || "Rendez-vous"}</span></Link>) : <p className="py-6 text-xs text-[#5b2f22]/40">Aucun rendez-vous à venir.</p>}</div></article> : null}
-
-        {has("support.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><MessageSquareText size={17} className="text-[#9d4c27]"/><h3 className="moony-serif text-xl">Service client</h3></div><Link href="/admin/service-client" className="text-[10px] text-[#8d3b19]">Ouvrir</Link></div><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-[#f7eee8] p-3 text-center"><strong className="moony-serif block text-2xl font-normal">{data.supportSummary.open}</strong><span className="text-[10px] text-[#5b2f22]/45">ouverts</span></div><div className="rounded-lg bg-red-50 p-3 text-center"><strong className="moony-serif block text-2xl font-normal text-red-700">{data.supportSummary.urgent}</strong><span className="text-[10px] text-red-600/70">urgents</span></div></div><div className="mt-3 space-y-2">{data.tickets.slice(0,3).map((item) => <Link href={`/admin/service-client?ticket=${item.id}`} key={item.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block truncate">{item.subject}</strong><span className="text-[#5b2f22]/45">{item.requester_name || item.requester_email} · {item.status}</span></Link>)}</div></article> : null}
-
-        {has("marketing.read") ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><Megaphone size={17} className="text-[#9d4c27]"/><h3 className="moony-serif text-xl">Marketing</h3></div><Link href="/admin/marketing" className="text-[10px] text-[#8d3b19]">Gérer</Link></div><div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg bg-[#f7eee8] p-3 text-center"><strong className="moony-serif block text-2xl font-normal">{data.marketingSummary.activeElements}</strong><span className="text-[10px] text-[#5b2f22]/45">activations actives</span></div><div className="rounded-lg bg-[#fbf0dd] p-3 text-center"><strong className="moony-serif block text-2xl font-normal">{data.marketingSummary.campaignsScheduled}</strong><span className="text-[10px] text-[#5b2f22]/45">campagnes prévues</span></div></div><div className="mt-3 space-y-2">{data.campaigns.slice(0,3).map((item) => <Link href="/admin/newsletters" key={item.id} className="block border-b border-[#5b2f22]/8 pb-2 text-[11px]"><strong className="block truncate">{item.name}</strong><span className="text-[#5b2f22]/45">{item.status}</span></Link>)}{!data.campaigns.length ? <p className="py-4 text-xs text-[#5b2f22]/40">Aucune campagne.</p> : null}</div></article> : null}
-
-        {(has("site.read") || has("content.read")) ? <article className="admin-card admin-shadow p-4"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><FileText size={17} className="text-[#9d4c27]"/><h3 className="moony-serif text-xl">Publication</h3></div><Link href={has("site.read") ? "/admin/pages" : "/admin/articles"} className="text-[10px] text-[#8d3b19]">Ouvrir</Link></div><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-lg bg-[#f7eee8] p-2"><strong className="moony-serif block text-2xl font-normal">{data.contentSummary.pagesDraft}</strong><span className="text-[9px] text-[#5b2f22]/45">pages brouillon</span></div><div className="rounded-lg bg-[#f7eee8] p-2"><strong className="moony-serif block text-2xl font-normal">{data.contentSummary.articlesDraft}</strong><span className="text-[9px] text-[#5b2f22]/45">articles à finir</span></div><div className="rounded-lg bg-[#f7eee8] p-2"><strong className="moony-serif block text-2xl font-normal">{data.contentSummary.resourcesDraft}</strong><span className="text-[9px] text-[#5b2f22]/45">ressources</span></div></div><div className="mt-3 space-y-2">{[...data.pages, ...data.articles, ...data.resources].sort((a,b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()).slice(0,3).map((item) => <div key={`${item.id}-${item.slug}`} className="flex items-center justify-between border-b border-[#5b2f22]/8 pb-2 text-[11px]"><span className="truncate pr-3">{item.title}</span><span className="shrink-0 text-[9px] text-[#5b2f22]/40">{shortDate(item.updated_at)}</span></div>)}</div></article> : null}
-      </div>
-
-      {has("team.manage") ? <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr]">
-        <article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><div className="flex items-center gap-2"><UsersRound size={18} className="text-[#9d4c27]"/><h2 className="moony-serif text-2xl">Équipe & sécurité</h2></div><Link href="/admin/equipe" className="text-xs text-[#8d3b19]">Gérer →</Link></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4"><div className="rounded-xl bg-[#fbf4ee] p-3"><strong className="moony-serif block text-3xl font-normal">{data.teamSummary.active}</strong><span className="text-[10px] text-[#5b2f22]/45">membres actifs</span></div><div className="rounded-xl bg-[#fbf4ee] p-3"><strong className="moony-serif block text-3xl font-normal">{data.teamSummary.activeSessions}</strong><span className="text-[10px] text-[#5b2f22]/45">sessions actives</span></div><div className={`rounded-xl p-3 ${data.teamSummary.withoutMfa ? "bg-amber-50" : "bg-emerald-50"}`}><strong className="moony-serif block text-3xl font-normal">{data.teamSummary.withoutMfa}</strong><span className="text-[10px] text-[#5b2f22]/45">sans 2FA</span></div><div className={`rounded-xl p-3 ${data.teamSummary.mustChangePassword ? "bg-amber-50" : "bg-emerald-50"}`}><strong className="moony-serif block text-3xl font-normal">{data.teamSummary.mustChangePassword}</strong><span className="text-[10px] text-[#5b2f22]/45">mdp temporaires</span></div></div></article>
-        <article className="admin-card admin-shadow p-5"><div className="flex items-center gap-2"><KeyRound size={18} className="text-[#9d4c27]"/><h2 className="moony-serif text-2xl">État du Control Center</h2></div><div className="mt-4 space-y-3 text-xs"><div className="flex items-center justify-between rounded-xl border border-[#5b2f22]/8 px-4 py-3"><span>Contrôle d’accès par rôle</span><span className="inline-flex items-center gap-1 text-emerald-700"><CheckCircle2 size={13}/>Actif</span></div><div className="flex items-center justify-between rounded-xl border border-[#5b2f22]/8 px-4 py-3"><span>Journal des actions sensibles</span><Link href="/admin/journal-activite" className="text-[#8d3b19]">Consulter →</Link></div><div className="flex items-center justify-between rounded-xl border border-[#5b2f22]/8 px-4 py-3"><span>Mes appareils connectés</span><Link href="/admin/mon-compte" className="text-[#8d3b19]">Sécurité →</Link></div></div></article>
-      </div> : null}
+      {has("team.manage") ? (
+        <section className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_.8fr]">
+          <article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Équipe & sécurité</h2><p className="text-[11px] text-[#5b2f22]/45">Accès au Control Center</p></div><UsersRound size={19} className="text-[#9d4c27]"/></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-[#f8eee7] p-4"><UserCheck size={17} className="text-[#8d3b19]"/><strong className="moony-serif mt-2 block text-3xl font-normal">{data.teamSummary.active}</strong><span className="text-[10px] text-[#5b2f22]/45">membres actifs</span></div><div className="rounded-xl bg-[#f8eee7] p-4"><KeyRound size={17} className="text-[#8d3b19]"/><strong className="moony-serif mt-2 block text-3xl font-normal">{data.teamSummary.withoutMfa}</strong><span className="text-[10px] text-[#5b2f22]/45">sans 2FA</span></div><div className="rounded-xl bg-[#f8eee7] p-4"><ShieldCheck size={17} className="text-[#8d3b19]"/><strong className="moony-serif mt-2 block text-3xl font-normal">{data.teamSummary.activeSessions}</strong><span className="text-[10px] text-[#5b2f22]/45">sessions actives</span></div></div><Link href="/admin/equipe" className="mt-4 inline-flex items-center gap-1 text-xs text-[#8d3b19]">Gérer les accès <ArrowRight size={13}/></Link></article>
+          <article className="admin-card admin-shadow p-5"><div className="flex items-center justify-between"><div><h2 className="moony-serif text-2xl">Marque & confiance</h2><p className="text-[11px] text-[#5b2f22]/45">Preuves sociales publiées</p></div><BarChart3 size={18} className="text-[#9d4c27]"/></div><div className="mt-4 grid grid-cols-2 gap-3 text-center"><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.partners.filter((item) => item.status === "published").length}</strong><span className="text-[10px] text-[#5b2f22]/45">partenaires</span></div><div className="rounded-lg bg-[#f7eee8] p-3"><strong className="moony-serif block text-3xl font-normal">{data.testimonials.filter((item) => item.status === "approved").length}</strong><span className="text-[10px] text-[#5b2f22]/45">avis approuvés</span></div></div><Link href="/admin/partenaires" className="mt-4 inline-flex items-center gap-1 text-xs text-[#8d3b19]">Gérer la confiance <ArrowRight size={13}/></Link></article>
+        </section>
+      ) : null}
     </AdminShell>
   );
 }
