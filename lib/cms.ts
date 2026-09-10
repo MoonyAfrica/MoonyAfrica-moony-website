@@ -14,6 +14,14 @@ export type CmsHero = {
   imagePosition?: string;
 };
 
+export type CmsPageMetadata = {
+  canonicalUrl?: string;
+  noIndex?: boolean;
+  ogImageUrl?: string;
+  ogTitle?: string;
+  ogDescription?: string;
+};
+
 export type PublishedPage = {
   id: string;
   title: string;
@@ -22,6 +30,7 @@ export type PublishedPage = {
   seo_description: string | null;
   hero: CmsHero;
   sections: CmsSection[];
+  metadata: CmsPageMetadata;
   updated_at: string;
 };
 
@@ -32,7 +41,7 @@ export async function getPublishedPage(slug: string): Promise<PublishedPage | nu
   try {
     const { data, error } = await supabase
       .from("website_pages")
-      .select("id,title,slug,seo_title,seo_description,hero,sections,updated_at")
+      .select("id,title,slug,seo_title,seo_description,hero,sections,metadata,updated_at")
       .eq("slug", slug)
       .eq("status", "published")
       .maybeSingle();
