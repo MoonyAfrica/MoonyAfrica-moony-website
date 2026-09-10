@@ -46,12 +46,14 @@ export async function POST(request: Request) {
   if (!role) return NextResponse.json({ error: "Rôle introuvable." }, { status: 422 });
 
   const now = new Date().toISOString();
+  const metadata = { mfa_required: body.mfaRequired === true };
   const { data, error: insertError } = await supabase.from("control_center_users").insert({
     full_name: fullName,
     email,
     password_hash: hashAdminPassword(password),
     role_id: role.id,
     active: true,
+    metadata,
     updated_at: now,
   }).select(userFields).single();
   if (insertError) {
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: duplicate ? "Un compte existe déjà avec cette adresse e-mail." : insertError.message }, { status: duplicate ? 409 : 500 });
   }
 
-  await writeAuditLog(supabase, session, "team.user_created", "control_center_user", data.id, `Compte créé pour ${fullName}`, { email, role: role.key });
+  await writeAuditLog(supabase, session, "team.user_created", "control_center_user", data.id, `Compte créé pour ${fullName}`, { email, role: role.key, mfaRequired: metadata.mfa_required });
   return NextResponse.json({ user: { ...data, role } }, { status: 201 });
 }
 
@@ -72,6 +74,10 @@ export async function PATCH(request: Request) {
   const id = asText(body.id, 80);
   if (!id) return NextResponse.json({ error: "Compte introuvable." }, { status: 422 });
 
+  const { data: current, error: currentError } = await supabase.from("control_center_users").select("id,email,metadata,role_id,active").eq("id", id).maybeSingle();
+  if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 });
+  if (!current) return NextResponse.json({ error: "Compte introuvable." }, { status: 404 });
+
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const changes: Record<string, unknown> = {};
   if (typeof body.fullName === "string") { patch.full_name = asText(body.fullName, 120); changes.fullName = patch.full_name; }
@@ -80,13 +86,22 @@ export async function PATCH(request: Request) {
     patch.active = body.active; changes.active = body.active;
   }
   if (typeof body.roleKey === "string") {
-    const role = await roleByKey(supabase, asText(body.roleKey, 40));
+    const nextKey = asText(body.roleKey, 40);
+    if (session?.sub === id && session.role === "founder" && nextKey !== "founder") {
+      return NextResponse.json({ error: "Le compte fondateur connecté ne peut pas retirer son propre rôle Founder." }, { status: 422 });
+    }
+    const role = await roleByKey(supabase, nextKey);
     if (!role) return NextResponse.json({ error: "Rôle introuvable." }, { status: 422 });
     patch.role_id = role.id; changes.role = role.key;
   }
   if (typeof body.password === "string" && body.password) {
     if (body.password.length < 12) return NextResponse.json({ error: "Le nouveau mot de passe doit contenir au moins 12 caractères." }, { status: 422 });
     patch.password_hash = hashAdminPassword(body.password); changes.passwordReset = true;
+  }
+  if (typeof body.mfaRequired === "boolean") {
+    const metadata = current.metadata && typeof current.metadata === "object" ? current.metadata as Record<string, unknown> : {};
+    patch.metadata = { ...metadata, mfa_required: body.mfaRequired };
+    changes.mfaRequired = body.mfaRequired;
   }
 
   const { data, error: updateError } = await supabase.from("control_center_users").update(patch).eq("id", id).select(userFields).single();
