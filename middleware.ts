@@ -92,8 +92,6 @@ async function storedSessionIsActive(session: EdgeSession) {
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       cache: "no-store",
     });
-    // Compatibility while the session migration is being rolled out: old environments
-    // continue to rely on the signed/expiring cookie until the table exists.
     if (!response.ok) return true;
     const rows = await response.json() as Array<{ expires_at?: string }>;
     if (!rows.length) return false;
@@ -105,7 +103,7 @@ async function storedSessionIsActive(session: EdgeSession) {
 }
 
 function requiredPermissions(pathname: string): string[] | null {
-  if (pathname === "/admin" || pathname.startsWith("/admin/mon-compte")) return null;
+  if (pathname === "/admin" || pathname.startsWith("/admin/mon-compte") || pathname.startsWith("/admin/activite")) return null;
   if (pathname.startsWith("/admin/equipe")) return ["team.manage"];
   if (pathname.startsWith("/admin/journal-activite")) return ["audit.read"];
   if (pathname.startsWith("/admin/crm")) return ["crm.read"];
@@ -114,6 +112,7 @@ function requiredPermissions(pathname: string): string[] | null {
   if (pathname.startsWith("/admin/marketing") || pathname.startsWith("/admin/newsletters") || pathname.startsWith("/admin/popups")) return ["marketing.read"];
   if (pathname.startsWith("/admin/analytics")) return ["analytics.read"];
   if (pathname.startsWith("/admin/seo")) return ["seo.read"];
+  if (pathname.startsWith("/admin/automatisations")) return ["settings.read"];
   if (pathname.startsWith("/admin/medias") || pathname.startsWith("/admin/ressources") || pathname.startsWith("/admin/articles") || pathname.startsWith("/admin/a-propos") || pathname.startsWith("/admin/temoignages") || pathname.startsWith("/admin/partenaires")) return ["content.read"];
   if (pathname.startsWith("/admin/site-design") || pathname.startsWith("/admin/navigation") || pathname.startsWith("/admin/pages") || pathname.startsWith("/admin/historique")) return ["site.read"];
   if (pathname.startsWith("/admin/parametres")) return ["settings.read", "site.read", "seo.read"];
@@ -129,8 +128,6 @@ function hasAnyPermission(session: EdgeSession, permissions: string[] | null) {
 function isPublicPath(pathname: string, method: string) {
   if (PUBLIC_ADMIN_PATHS.some((path) => pathname === path || pathname.startsWith(`${path}/`))) return true;
   if (PUBLIC_ADMIN_API_PATHS.includes(pathname)) return true;
-  // Login and logout must remain reachable without a current session; GET is deliberately
-  // protected so a revoked cookie cannot still report itself as authenticated.
   if (pathname === "/api/admin/session" && method !== "GET") return true;
   return false;
 }
