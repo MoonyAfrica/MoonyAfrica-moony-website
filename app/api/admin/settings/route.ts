@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-api";
 
-const knownKeys = ["general","integrations","privacy","branding"] as const;
+const knownKeys = ["general","integrations","privacy","branding","pricing"] as const;
 
 export async function GET(request: Request) {
   const { error, supabase } = requireAdmin(request); if (error || !supabase) return error;
