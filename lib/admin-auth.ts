@@ -24,10 +24,21 @@ export type AdminSession = {
   permissions: string[];
   exp: number;
   legacy?: boolean;
+  mfa?: boolean;
 };
 
 function envPassword() { return process.env.ADMIN_CONTROL_CENTER_PASSWORD ?? ""; }
 function envSecret() { return process.env.ADMIN_CONTROL_CENTER_SECRET ?? ""; }
+
+export function adminSessionMaxAgeSeconds() {
+  const raw = Number(process.env.CONTROL_CENTER_SESSION_HOURS ?? "4");
+  const hours = Number.isFinite(raw) ? Math.min(12, Math.max(1, raw)) : 4;
+  return Math.round(hours * 60 * 60);
+}
+
+export function isGlobalMfaRequired() {
+  return String(process.env.CONTROL_CENTER_REQUIRE_MFA ?? "").toLowerCase() === "true";
+}
 
 export function isAdminAuthConfigured() {
   return Boolean(envSecret() && (envPassword() || (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)));
@@ -48,7 +59,7 @@ function signature(payload: string) {
 
 export function createAdminSessionToken(input: Omit<AdminSession, "exp"> & { exp?: number }) {
   if (!envSecret()) return null;
-  const session: AdminSession = { ...input, exp: input.exp ?? Math.floor(Date.now() / 1000) + 60 * 60 * 10 };
+  const session: AdminSession = { ...input, exp: input.exp ?? Math.floor(Date.now() / 1000) + adminSessionMaxAgeSeconds() };
   const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
   return `${payload}.${signature(payload)}`;
 }
@@ -91,6 +102,17 @@ export function verifyAdminPassword(password: string, encoded: string) {
   }
 }
 
+export function hashMfaCode(challengeId: string, code: string) {
+  const secret = envSecret();
+  if (!secret) return "";
+  return createHmac("sha256", secret).update(`mfa:${challengeId}:${code}`).digest("base64url");
+}
+
+export function verifyMfaCode(challengeId: string, code: string, expectedHash: string) {
+  const actual = hashMfaCode(challengeId, code);
+  return Boolean(actual && expectedHash && safeEqual(actual, expectedHash));
+}
+
 function readCookie(header: string | null, name: string) {
   if (!header) return "";
   for (const part of header.split(";")) {
@@ -121,5 +143,6 @@ export function legacyFounderSession(): Omit<AdminSession, "exp"> {
     role: "founder",
     permissions: ["*"],
     legacy: true,
+    mfa: false,
   };
 }
