@@ -3,20 +3,11 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Copy, ExternalLink, FilePlus2, Loader2, Save, Trash2 } from "lucide-react";
+import { AdminHeroEditor, type AdminHeroContent } from "@/components/admin-hero-editor";
 import { AdminPagePreview } from "@/components/admin-page-preview";
 import { AdminSectionEditor } from "@/components/admin-section-editor";
 import { AdminCard, AdminWorkspace } from "@/components/admin-workspace";
 import type { CmsSection } from "@/lib/cms-types";
-
-type HeroContent = {
-  eyebrow?: string;
-  title?: string;
-  body?: string;
-  primaryLabel?: string;
-  primaryHref?: string;
-  secondaryLabel?: string;
-  secondaryHref?: string;
-};
 
 type CmsPage = {
   id: string;
@@ -25,7 +16,7 @@ type CmsPage = {
   status: "draft" | "published" | "archived";
   seo_title: string | null;
   seo_description: string | null;
-  hero: HeroContent;
+  hero: AdminHeroContent;
   sections: CmsSection[];
   updated_at: string;
 };
@@ -33,161 +24,48 @@ type CmsPage = {
 const now = () => new Date().toISOString();
 const fallbackPages: CmsPage[] = [
   { id:"home", title:"Accueil", slug:"/", status:"published", seo_title:null, seo_description:null, hero:{ title:"Ancrée dans nos cultures, tournée vers l’avenir.", body:"Une expérience de santé féminine qui réunit transmission, communauté, bien-être et innovation à chaque étape de la vie.", primaryLabel:"Découvrir la communauté", primaryHref:"/communaute", secondaryLabel:"Nos services", secondaryHref:"/services" }, sections:[], updated_at:now() },
-  { id:"mission", title:"Notre mission", slug:"/notre-mission", status:"published", seo_title:null, seo_description:null, hero:{ title:"Notre mission\nRendre la santé féminine plus accessible, plus humaine et plus enracinée dans les réalités des femmes africaines.", body:"De la puberté à la maternité, du post-partum au bien-être quotidien, MOONY informe, accompagne et relie les femmes à des ressources fiables, des professionnelles de santé et une communauté bienveillante." }, sections:[], updated_at:now() },
-  { id:"approach", title:"Notre approche", slug:"/notre-approche", status:"published", seo_title:null, seo_description:null, hero:{ title:"Écouter,\norienter,\naccompagner.", body:"MOONY relie information fiable, communauté bienveillante et accès à des professionnelles pour accompagner les femmes à chaque étape de leur vie." }, sections:[], updated_at:now() },
-  { id:"about", title:"À propos", slug:"/a-propos", status:"published", seo_title:null, seo_description:null, hero:{ eyebrow:"À propos", title:"Une histoire de soin,\nde transmission\net d’horizons." }, sections:[], updated_at:now() },
+  { id:"mission", title:"Notre mission", slug:"/notre-mission", status:"published", seo_title:null, seo_description:null, hero:{ title:"Notre mission\nRendre la santé féminine plus accessible, plus humaine et plus enracinée dans les réalités des femmes africaines.", body:"De la puberté à la maternité, du post-partum au bien-être quotidien, MOONY informe, accompagne et relie les femmes à des ressources fiables, des professionnelles de santé et une communauté bienveillante.", imagePosition:"65% center" }, sections:[], updated_at:now() },
+  { id:"approach", title:"Notre approche", slug:"/notre-approche", status:"published", seo_title:null, seo_description:null, hero:{ title:"Écouter,\norienter,\naccompagner.", body:"MOONY relie information fiable, communauté bienveillante et accès à des professionnelles pour accompagner les femmes à chaque étape de leur vie.", imagePosition:"68% center" }, sections:[], updated_at:now() },
+  { id:"about", title:"À propos", slug:"/a-propos", status:"published", seo_title:null, seo_description:null, hero:{ eyebrow:"À propos", title:"Une histoire de soin,\nde transmission\net d’horizons.", imagePosition:"61% center" }, sections:[], updated_at:now() },
   { id:"services", title:"Nos services", slug:"/services", status:"published", seo_title:null, seo_description:null, hero:{}, sections:[], updated_at:now() },
-  { id:"community", title:"Communauté", slug:"/communaute", status:"published", seo_title:null, seo_description:null, hero:{}, sections:[], updated_at:now() },
+  { id:"community", title:"Communauté", slug:"/communaute", status:"published", seo_title:null, seo_description:null, hero:{ imagePosition:"65% center" }, sections:[], updated_at:now() },
   { id:"resources", title:"Ressources", slug:"/ressources", status:"published", seo_title:null, seo_description:null, hero:{}, sections:[], updated_at:now() },
 ];
 
 function emptyPage(): CmsPage {
-  return { id:"", title:"Nouvelle page", slug:"/nouvelle-page", status:"draft", seo_title:"", seo_description:"", hero:{ title:"Titre principal", body:"Texte d’introduction de la page.", primaryLabel:"Découvrir", primaryHref:"/" }, sections:[], updated_at:now() };
+  return { id:"", title:"Nouvelle page", slug:"/nouvelle-page", status:"draft", seo_title:"", seo_description:"", hero:{ title:"Titre principal", body:"Texte d’introduction de la page.", primaryLabel:"Découvrir", primaryHref:"/", imagePosition:"65% center" }, sections:[], updated_at:now() };
 }
+function humanDate(value:string){return new Intl.DateTimeFormat("fr-FR",{day:"numeric",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(value));}
 
-function humanDate(value:string) {
-  return new Intl.DateTimeFormat("fr-FR", { day:"numeric", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }).format(new Date(value));
-}
+export default function PagesAdmin(){
+  const [pages,setPages]=useState<CmsPage[]>(fallbackPages);
+  const [selectedId,setSelectedId]=useState(fallbackPages[0].id);
+  const [draft,setDraft]=useState<CmsPage>(fallbackPages[0]);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [notice,setNotice]=useState("");
+  const [connected,setConnected]=useState(false);
+  const selected=useMemo(()=>pages.find(page=>page.id===selectedId)??null,[pages,selectedId]);
 
-export default function PagesAdmin() {
-  const [pages,setPages] = useState<CmsPage[]>(fallbackPages);
-  const [selectedId,setSelectedId] = useState(fallbackPages[0].id);
-  const [draft,setDraft] = useState<CmsPage>(fallbackPages[0]);
-  const [loading,setLoading] = useState(true);
-  const [saving,setSaving] = useState(false);
-  const [notice,setNotice] = useState("");
-  const [connected,setConnected] = useState(false);
+  useEffect(()=>{void loadPages()},[]);
+  function selectPage(page:CmsPage){setSelectedId(page.id);setDraft(structuredClone(page));setNotice("");}
+  async function loadPages(){setLoading(true);try{const response=await fetch("/api/admin/pages",{cache:"no-store"});if(response.status===401){location.href="/admin/login";return}if(!response.ok)throw new Error(String(response.status));const data=await response.json();const rows=(data.pages??[]) as CmsPage[];if(rows.length){const requestedId=typeof window!=="undefined"?new URLSearchParams(window.location.search).get("page"):null;const target=(requestedId?rows.find(page=>page.id===requestedId):null)??rows[0];setPages(rows);setSelectedId(target.id);setDraft(structuredClone(target))}setConnected(true)}catch{setConnected(false)}finally{setLoading(false)}}
+  function startNew(){setSelectedId("");setDraft(emptyPage());setNotice("")}
+  async function save(statusOverride?:CmsPage["status"]){setSaving(true);setNotice("");const nextStatus=statusOverride??draft.status;try{const response=await fetch("/api/admin/pages",{method:draft.id?"PATCH":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:draft.id,title:draft.title,slug:draft.slug,status:nextStatus,seoTitle:draft.seo_title,seoDescription:draft.seo_description,hero:draft.hero,sections:draft.sections})});const data=await response.json();if(response.status===401){location.href="/admin/login";return}if(!response.ok)throw new Error(data.error||"Enregistrement impossible.");const saved=data.page as CmsPage;setPages(current=>current.some(page=>page.id===saved.id)?current.map(page=>page.id===saved.id?saved:page):[saved,...current]);setSelectedId(saved.id);setDraft(saved);setConnected(true);setNotice(nextStatus==="published"?"Page publiée. Les visiteurs voient désormais cette version.":"Brouillon enregistré. Continuez à le prévisualiser avant publication.")}catch(error){setNotice(error instanceof Error?error.message:"Enregistrement impossible.")}finally{setSaving(false)}}
+  function duplicate(){setSelectedId("");setDraft({...structuredClone(draft),id:"",title:`${draft.title} — copie`,slug:`${draft.slug==="/"?"/accueil":draft.slug}-copie`,status:"draft",updated_at:now()});setNotice("Copie créée en brouillon. Cliquez sur Enregistrer.")}
+  async function removePage(){if(!draft.id||!confirm(`Supprimer la page « ${draft.title} » ?`))return;setSaving(true);try{const response=await fetch(`/api/admin/pages?id=${encodeURIComponent(draft.id)}`,{method:"DELETE"});const data=await response.json();if(!response.ok)throw new Error(data.error||"Suppression impossible.");const next=pages.filter(page=>page.id!==draft.id);setPages(next);if(next.length)selectPage(next[0]);else{setSelectedId("");setDraft(emptyPage())}setNotice("Page supprimée.")}catch(error){setNotice(error instanceof Error?error.message:"Suppression impossible.")}finally{setSaving(false)}}
+  const hasUnsavedStatusChange=selected?selected.status!==draft.status:draft.status!=="draft";
 
-  const selected = useMemo(() => pages.find(page => page.id === selectedId) ?? null, [pages, selectedId]);
-
-  useEffect(() => { void loadPages(); }, []);
-
-  function selectPage(page:CmsPage) {
-    setSelectedId(page.id);
-    setDraft(structuredClone(page));
-    setNotice("");
-  }
-
-  async function loadPages() {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/admin/pages", { cache:"no-store" });
-      if (response.status === 401) { location.href = "/admin/login"; return; }
-      if (!response.ok) throw new Error(String(response.status));
-      const data = await response.json();
-      const rows = (data.pages ?? []) as CmsPage[];
-      if (rows.length) {
-        const requestedId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("page") : null;
-        const target = (requestedId ? rows.find(page => page.id === requestedId) : null) ?? rows[0];
-        setPages(rows);
-        setSelectedId(target.id);
-        setDraft(structuredClone(target));
-      }
-      setConnected(true);
-    } catch {
-      setConnected(false);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function updateHero(key:keyof HeroContent, value:string) {
-    setDraft(current => ({ ...current, hero:{ ...current.hero, [key]:value } }));
-  }
-
-  function startNew() {
-    setSelectedId("");
-    setDraft(emptyPage());
-    setNotice("");
-  }
-
-  async function save(statusOverride?:CmsPage["status"]) {
-    setSaving(true);
-    setNotice("");
-    const nextStatus = statusOverride ?? draft.status;
-    try {
-      const response = await fetch("/api/admin/pages", {
-        method:draft.id ? "PATCH" : "POST",
-        headers:{ "Content-Type":"application/json" },
-        body:JSON.stringify({ id:draft.id, title:draft.title, slug:draft.slug, status:nextStatus, seoTitle:draft.seo_title, seoDescription:draft.seo_description, hero:draft.hero, sections:draft.sections }),
-      });
-      const data = await response.json();
-      if (response.status === 401) { location.href = "/admin/login"; return; }
-      if (!response.ok) throw new Error(data.error || "Enregistrement impossible.");
-      const saved = data.page as CmsPage;
-      setPages(current => current.some(page => page.id === saved.id) ? current.map(page => page.id === saved.id ? saved : page) : [saved, ...current]);
-      setSelectedId(saved.id);
-      setDraft(saved);
-      setConnected(true);
-      setNotice(nextStatus === "published" ? "Page publiée. Les visiteurs voient désormais cette version." : "Brouillon enregistré. Continuez à le prévisualiser avant publication.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Enregistrement impossible.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function duplicate() {
-    setSelectedId("");
-    setDraft({ ...structuredClone(draft), id:"", title:`${draft.title} — copie`, slug:`${draft.slug === "/" ? "/accueil" : draft.slug}-copie`, status:"draft", updated_at:now() });
-    setNotice("Copie créée en brouillon. Cliquez sur Enregistrer.");
-  }
-
-  async function removePage() {
-    if (!draft.id || !confirm(`Supprimer la page « ${draft.title} » ?`)) return;
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/admin/pages?id=${encodeURIComponent(draft.id)}`, { method:"DELETE" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Suppression impossible.");
-      const next = pages.filter(page => page.id !== draft.id);
-      setPages(next);
-      if (next.length) selectPage(next[0]); else { setSelectedId(""); setDraft(emptyPage()); }
-      setNotice("Page supprimée.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Suppression impossible.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const hasUnsavedStatusChange = selected ? selected.status !== draft.status : draft.status !== "draft";
-
-  return <AdminWorkspace active="Pages" title="Pages & CMS" subtitle="Votre mini-Shopify MOONY : textes, CTA, SEO, médias et blocs de contenu sans toucher au code." actions={<>
-    <button onClick={startNew} className="inline-flex items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm"><FilePlus2 size={15}/>Nouvelle page</button>
-    <button onClick={()=>void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg border border-[#7e3518]/20 bg-white px-4 py-2.5 text-sm text-[#7e3518] disabled:opacity-50">{saving?<Loader2 className="animate-spin" size={15}/>:<Save size={15}/>}Enregistrer</button>
-    <button onClick={()=>void save("published")} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white disabled:opacity-50">Publier</button>
-  </>}>
-    {!connected && !loading ? <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><span>Mode aperçu : connectez le Control Center et appliquez les migrations Supabase pour enregistrer les changements.</span><Link href="/admin/login" className="font-semibold underline">Se connecter</Link></div> : null}
+  return <AdminWorkspace active="Pages" title="Pages & CMS" subtitle="Votre mini-Shopify MOONY : textes, images, CTA, SEO et blocs de contenu sans toucher au code." actions={<><button onClick={startNew} className="inline-flex items-center gap-2 rounded-lg border border-[#5b2f22]/12 bg-white px-4 py-2.5 text-sm"><FilePlus2 size={15}/>Nouvelle page</button><button onClick={()=>void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-lg border border-[#7e3518]/20 bg-white px-4 py-2.5 text-sm text-[#7e3518] disabled:opacity-50">{saving?<Loader2 className="animate-spin" size={15}/>:<Save size={15}/>}Enregistrer</button><button onClick={()=>void save("published")} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white disabled:opacity-50">Publier</button></>}>
+    {!connected&&!loading?<div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"><span>Mode aperçu : connectez le Control Center et appliquez les migrations Supabase pour enregistrer les changements.</span><Link href="/admin/login" className="font-semibold underline">Se connecter</Link></div>:null}
 
     <div className="grid gap-4 2xl:grid-cols-[.78fr_1.22fr]">
-      <AdminCard title="Toutes les pages" action={<span className="text-xs text-[#5b2f22]/45">{loading?"Chargement…":`${pages.length} pages`}</span>}>
-        <div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="text-xs text-[#5b2f22]/45"><tr><th className="pb-3">Titre</th><th>URL</th><th>Modification</th><th>Statut</th></tr></thead><tbody>{pages.map(page=><tr key={page.id} onClick={()=>selectPage(page)} className={`cursor-pointer border-t border-[#5b2f22]/8 transition hover:bg-[#fbf4ee] ${selectedId===page.id?"bg-[#f8ece4]":""}`}><td className="py-4 font-medium">{page.title}</td><td className="text-[#5b2f22]/55">{page.slug}</td><td className="text-[#5b2f22]/55">{humanDate(page.updated_at)}</td><td><span className={`rounded-full px-3 py-1 text-xs ${page.status==="published"?"bg-emerald-100 text-emerald-800":page.status==="archived"?"bg-zinc-100 text-zinc-600":"bg-amber-100 text-amber-800"}`}>{page.status==="published"?"Publié":page.status==="archived"?"Archivé":"Brouillon"}</span></td></tr>)}</tbody></table></div>
-      </AdminCard>
+      <AdminCard title="Toutes les pages" action={<span className="text-xs text-[#5b2f22]/45">{loading?"Chargement…":`${pages.length} pages`}</span>}><div className="overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="text-xs text-[#5b2f22]/45"><tr><th className="pb-3">Titre</th><th>URL</th><th>Modification</th><th>Statut</th></tr></thead><tbody>{pages.map(page=><tr key={page.id} onClick={()=>selectPage(page)} className={`cursor-pointer border-t border-[#5b2f22]/8 transition hover:bg-[#fbf4ee] ${selectedId===page.id?"bg-[#f8ece4]":""}`}><td className="py-4 font-medium">{page.title}</td><td className="text-[#5b2f22]/55">{page.slug}</td><td className="text-[#5b2f22]/55">{humanDate(page.updated_at)}</td><td><span className={`rounded-full px-3 py-1 text-xs ${page.status==="published"?"bg-emerald-100 text-emerald-800":page.status==="archived"?"bg-zinc-100 text-zinc-600":"bg-amber-100 text-amber-800"}`}>{page.status==="published"?"Publié":page.status==="archived"?"Archivé":"Brouillon"}</span></td></tr>)}</tbody></table></div></AdminCard>
 
       <div className="space-y-4">
         <AdminCard title={draft.id?`Modifier — ${draft.title}`:"Créer une page"} action={<div className="flex gap-2"><button onClick={duplicate} className="inline-flex items-center gap-1.5 rounded-lg border border-[#5b2f22]/10 px-3 py-2 text-xs"><Copy size={13}/>Dupliquer</button>{draft.id?<button onClick={()=>void removePage()} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs text-red-700"><Trash2 size={13}/>Supprimer</button>:null}</div>}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label><span className="mb-1.5 block text-xs font-semibold">Titre interne</span><input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"/></label>
-            <label><span className="mb-1.5 block text-xs font-semibold">URL</span><input value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"/></label>
-            <label><span className="mb-1.5 block text-xs font-semibold">Statut</span><select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value as CmsPage["status"]})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"><option value="draft">Brouillon</option><option value="published">Publié</option><option value="archived">Archivé</option></select>{hasUnsavedStatusChange?<span className="mt-1 block text-[10px] text-amber-700">Ce changement de statut n’est pas encore enregistré.</span>:null}</label>
-            <div className="flex items-end">{selected?.status==="published"?<a href={selected.slug||"/"} target="_blank" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#5b2f22]/12 bg-[#fffaf4] px-3 py-3 text-sm"><ExternalLink size={14}/>Ouvrir la page publique</a>:<div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-center text-xs text-amber-800">Brouillon : utilisez l’aperçu instantané ci-dessous.</div>}</div>
-          </div>
-
-          <div className="mt-6 border-t border-[#5b2f22]/10 pt-5">
-            <p className="text-xs font-semibold uppercase tracking-[.18em] text-[#8b4b32]">Hero / introduction</p>
-            <div className="mt-4 grid gap-4">
-              <label><span className="mb-1 block text-xs font-semibold">Surtitre</span><input value={draft.hero.eyebrow??""} onChange={e=>updateHero("eyebrow",e.target.value)} className="w-full rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm"/></label>
-              <label><span className="mb-1 block text-xs font-semibold">Titre principal</span><textarea rows={4} value={draft.hero.title??""} onChange={e=>updateHero("title",e.target.value)} className="w-full resize-none rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm leading-6"/></label>
-              <label><span className="mb-1 block text-xs font-semibold">Texte d’introduction</span><textarea rows={4} value={draft.hero.body??""} onChange={e=>updateHero("body",e.target.value)} className="w-full resize-none rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm leading-6"/></label>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label><span className="mb-1 block text-xs font-semibold">Bouton principal</span><input value={draft.hero.primaryLabel??""} onChange={e=>updateHero("primaryLabel",e.target.value)} className="w-full rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm"/></label>
-                <label><span className="mb-1 block text-xs font-semibold">Lien principal</span><input value={draft.hero.primaryHref??""} onChange={e=>updateHero("primaryHref",e.target.value)} className="w-full rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm"/></label>
-                <label><span className="mb-1 block text-xs font-semibold">Bouton secondaire</span><input value={draft.hero.secondaryLabel??""} onChange={e=>updateHero("secondaryLabel",e.target.value)} className="w-full rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm"/></label>
-                <label><span className="mb-1 block text-xs font-semibold">Lien secondaire</span><input value={draft.hero.secondaryHref??""} onChange={e=>updateHero("secondaryHref",e.target.value)} className="w-full rounded-xl border border-[#5b2f22]/12 px-3 py-3 text-sm"/></label>
-              </div>
-            </div>
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2"><label><span className="mb-1.5 block text-xs font-semibold">Titre interne</span><input value={draft.title} onChange={e=>setDraft({...draft,title:e.target.value})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"/></label><label><span className="mb-1.5 block text-xs font-semibold">URL</span><input value={draft.slug} onChange={e=>setDraft({...draft,slug:e.target.value})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"/></label><label><span className="mb-1.5 block text-xs font-semibold">Statut</span><select value={draft.status} onChange={e=>setDraft({...draft,status:e.target.value as CmsPage["status"]})} className="w-full rounded-xl border border-[#5b2f22]/12 bg-white px-3 py-3 text-sm"><option value="draft">Brouillon</option><option value="published">Publié</option><option value="archived">Archivé</option></select>{hasUnsavedStatusChange?<span className="mt-1 block text-[10px] text-amber-700">Ce changement de statut n’est pas encore enregistré.</span>:null}</label><div className="flex items-end">{selected?.status==="published"?<a href={selected.slug||"/"} target="_blank" className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#5b2f22]/12 bg-[#fffaf4] px-3 py-3 text-sm"><ExternalLink size={14}/>Ouvrir la page publique</a>:<div className="w-full rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 text-center text-xs text-amber-800">Brouillon : utilisez l’aperçu instantané ci-dessous.</div>}</div></div>
+          <div className="mt-6 border-t border-[#5b2f22]/10 pt-5"><p className="text-xs font-semibold uppercase tracking-[.18em] text-[#8b4b32]">Hero / introduction</p><div className="mt-4"><AdminHeroEditor hero={draft.hero??{}} onChange={hero=>setDraft(current=>({...current,hero}))}/></div></div>
         </AdminCard>
 
         <AdminCard title="Blocs de contenu"><AdminSectionEditor sections={draft.sections??[]} onChange={sections=>setDraft(current=>({...current,sections}))}/></AdminCard>
