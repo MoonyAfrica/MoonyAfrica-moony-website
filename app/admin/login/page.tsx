@@ -1,8 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { ArrowLeft, KeyRound, Loader2, LockKeyhole, MailCheck } from "lucide-react";
 import { MoonyLogo } from "@/components/moony-logo";
+
+function destinationAfterLogin() {
+  const params = new URLSearchParams(window.location.search);
+  const requested = params.get("returnTo") ?? "";
+  if (requested.startsWith("/admin") && !requested.startsWith("//") && !requested.startsWith("/admin/login")) return requested;
+  return "/admin";
+}
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -39,7 +47,7 @@ export default function AdminLoginPage() {
         setCode("");
         return;
       }
-      window.location.href = "/admin";
+      window.location.href = destinationAfterLogin();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Connexion impossible.");
     } finally {
@@ -59,7 +67,7 @@ export default function AdminLoginPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Vérification impossible.");
-      window.location.href = "/admin";
+      window.location.href = destinationAfterLogin();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Vérification impossible.");
     } finally {
@@ -107,6 +115,7 @@ export default function AdminLoginPage() {
               <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" className="w-full rounded-xl border border-[#5b2f22]/12 bg-[#fffdfa] px-4 py-3.5 outline-none focus:border-[#9d4c27]/60" placeholder="vous@moonyafrica.com" />
               <label className="block text-xs font-semibold">Mot de passe</label>
               <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" className="w-full rounded-xl border border-[#5b2f22]/12 bg-[#fffdfa] px-4 py-3.5 outline-none focus:border-[#9d4c27]/60" placeholder="••••••••••••" />
+              <div className="-mt-1 flex justify-end"><Link href="/admin/mot-de-passe-oublie" className="text-[11px] font-medium text-[#8a4a31] hover:underline">Mot de passe oublié ?</Link></div>
               {message ? <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{message}</p> : null}
               <button disabled={loading || !password} className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#7e3518] px-5 py-3.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50">{loading ? <Loader2 className="animate-spin" size={15} /> : null}{loading ? "Connexion…" : "Se connecter"}</button>
             </form>
