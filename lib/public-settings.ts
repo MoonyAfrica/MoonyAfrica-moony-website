@@ -36,6 +36,28 @@ export type PublicSeoSettings = {
   organizationName: string;
 };
 
+export type NavigationItem = { label: string; href: string; visible?: boolean };
+export type PublicNavigationSettings = {
+  items: NavigationItem[];
+  primaryLabel: string;
+  primaryHref: string;
+  secondaryLabel: string;
+  secondaryHref: string;
+};
+export type FooterLink = { label: string; href: string };
+export type FooterColumn = { title: string; links: FooterLink[] };
+export type PublicFooterSettings = {
+  headline: string;
+  body: string;
+  primaryLabel: string;
+  primaryHref: string;
+  secondaryLabel: string;
+  secondaryHref: string;
+  columns: FooterColumn[];
+  instagramUrl: string;
+  linkedinUrl: string;
+};
+
 export const defaultPricing: PricingSettings = {
   currency: "FCFA",
   teleconsultationCommission: 3,
@@ -66,6 +88,38 @@ export const defaultSeo: PublicSeoSettings = {
   defaultLocale: "fr_FR",
   allowIndexing: true,
   organizationName: "MOONY Africa",
+};
+
+export const defaultNavigation: PublicNavigationSettings = {
+  items: [
+    { label: "Accueil", href: "/", visible: true },
+    { label: "Notre mission", href: "/notre-mission", visible: true },
+    { label: "Notre approche", href: "/notre-approche", visible: true },
+    { label: "À propos", href: "/a-propos", visible: true },
+    { label: "Nos services", href: "/services", visible: true },
+    { label: "Communauté", href: "/communaute", visible: true },
+    { label: "Ressources", href: "/ressources", visible: true },
+  ],
+  primaryLabel: "Prendre rendez-vous",
+  primaryHref: "/contact?objet=rendez-vous",
+  secondaryLabel: "Se connecter",
+  secondaryHref: "https://application.moony-africa.com",
+};
+
+export const defaultFooter: PublicFooterSettings = {
+  headline: "Pour la santé des femmes, à chaque étape de leur vie.",
+  body: "Une expérience de santé féminine pensée pour être utile, rassurante et accessible, avec une ambition africaine et une ouverture sur le monde.",
+  primaryLabel: "Accéder à l’application",
+  primaryHref: "https://application.moony-africa.com",
+  secondaryLabel: "Nous contacter",
+  secondaryHref: "/contact",
+  columns: [
+    { title: "Découvrir", links: [{label:"Notre mission",href:"/notre-mission"},{label:"Notre approche",href:"/notre-approche"},{label:"Nos services",href:"/services"},{label:"Communauté",href:"/communaute"},{label:"Ressources",href:"/ressources"}] },
+    { title: "Confiance", links: [{label:"Protection des données",href:"/confidentialite"},{label:"Sécurité",href:"/confidentialite#securite"},{label:"Service client",href:"/support"},{label:"Méthode & qualité",href:"/notre-approche"},{label:"Professionnels de santé",href:"/services#professionnels"}] },
+    { title: "Entreprise", links: [{label:"À propos",href:"/a-propos"},{label:"Partenariats",href:"/contact?objet=partenariat"},{label:"Presse",href:"/presse"},{label:"Carrières",href:"/carrieres"},{label:"Nous contacter",href:"/contact"}] },
+  ],
+  instagramUrl: "",
+  linkedinUrl: "",
 };
 
 function mergeObject<T extends object>(defaults: T, value: unknown): T {
@@ -106,6 +160,24 @@ export async function getPublicSiteSettings(): Promise<{ general: PublicGeneralS
     };
   } catch {
     return { general: defaultGeneral, seo: defaultSeo };
+  }
+}
+
+export async function getPublicChromeSettings(): Promise<{ navigation: PublicNavigationSettings; footer: PublicFooterSettings }> {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return { navigation: defaultNavigation, footer: defaultFooter };
+  try {
+    const { data, error } = await supabase.from("website_settings").select("key,value").in("key", ["navigation", "footer"]);
+    if (error) return { navigation: defaultNavigation, footer: defaultFooter };
+    const rows = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
+    const nav = mergeObject(defaultNavigation, rows.navigation);
+    const footer = mergeObject(defaultFooter, rows.footer);
+    return {
+      navigation: { ...nav, items: Array.isArray(nav.items) ? nav.items : defaultNavigation.items },
+      footer: { ...footer, columns: Array.isArray(footer.columns) ? footer.columns : defaultFooter.columns },
+    };
+  } catch {
+    return { navigation: defaultNavigation, footer: defaultFooter };
   }
 }
 
