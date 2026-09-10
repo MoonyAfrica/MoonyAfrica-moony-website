@@ -86,12 +86,17 @@ export default function ServiceClientPage() {
     setLoading(true);
     try {
       const response = await fetch("/api/admin/support", { cache: "no-store" });
+      if (response.status === 401) { window.location.href = "/admin/login"; return; }
       if (!response.ok) throw new Error(String(response.status));
       const data = await response.json();
       const rows = (data.tickets ?? []) as Ticket[];
       setTickets(rows);
       setMessages((data.messages ?? []) as TicketMessage[]);
-      if (rows.length) setSelectedId(rows[0].id);
+      if (rows.length) {
+        const requested = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("ticket") : null;
+        const target = requested ? rows.find((ticket) => ticket.id === requested) : null;
+        setSelectedId(target?.id ?? rows[0].id);
+      }
       setConnected(true);
     } catch {
       setConnected(false);
