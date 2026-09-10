@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { asNullableText, asText, requireAdmin } from "@/lib/admin-api";
+import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import type { AdminSession } from "@/lib/admin-auth";
 
 const statuses = new Set(["pending", "confirmed", "completed", "cancelled", "no_show"]);
 const statusLabels: Record<string,string> = { pending:"En attente", confirmed:"Confirmé", completed:"Terminé", cancelled:"Annulé", no_show:"Absent" };
@@ -8,13 +9,13 @@ async function parseBody(request: Request) {
   try { return (await request.json()) as Record<string, unknown>; } catch { return null; }
 }
 
-async function logMeeting(supabase: ReturnType<typeof requireAdmin>["supabase"], leadId:string, summary:string, body?:string | null) {
+async function logMeeting(supabase: ReturnType<typeof requireAdmin>["supabase"], leadId:string, summary:string, body:string | null, session:AdminSession|null) {
   if (!supabase) return;
-  await supabase.from("website_crm_activities").insert({ lead_id: leadId, kind:"meeting", summary, body: body || null, created_by:"Control Center" });
+  await supabase.from("website_crm_activities").insert({ lead_id: leadId, kind:"meeting", summary, body: body || null, created_by:session?.name || session?.email || "Control Center" });
 }
 
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase } = requireAdmin(request, "appointments.read");
   if (error || !supabase) return error;
 
   const [{ data: appointments, error: appointmentError }, { data: leads, error: leadError }] = await Promise.all([
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "appointments.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -49,13 +50,14 @@ export async function POST(request: Request) {
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   if (data.lead_id) {
     await supabase.from("website_leads").update({ status: "appointment", updated_at: new Date().toISOString() }).eq("id", data.lead_id);
-    await logMeeting(supabase, data.lead_id, "Rendez-vous créé", `${new Date(startsAt).toLocaleString("fr-FR")} · ${data.provider || "Control Center"}`);
+    await logMeeting(supabase, data.lead_id, "Rendez-vous créé", `${new Date(startsAt).toLocaleString("fr-FR")} · ${data.provider || "Control Center"}`, session);
   }
+  await writeAuditLog(supabase, session, "appointments.created", "appointment", data.id, "Rendez-vous créé", { leadId:data.lead_id, startsAt:data.starts_at, status:data.status });
   return NextResponse.json({ appointment: data }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "appointments.write");
   if (error || !supabase) return error;
   const body = await parseBody(request);
   if (!body) return NextResponse.json({ error: "Requête invalide." }, { status: 400 });
@@ -75,19 +77,21 @@ export async function PATCH(request: Request) {
   const { data, error: updateError } = await supabase.from("website_appointments").update(patch).eq("id", id).select("*").single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   if (data.lead_id && before?.status !== data.status) {
-    await logMeeting(supabase, data.lead_id, "Statut du rendez-vous modifié", `${statusLabels[before?.status || ""] || before?.status || "—"} → ${statusLabels[data.status] || data.status}`);
+    await logMeeting(supabase, data.lead_id, "Statut du rendez-vous modifié", `${statusLabels[before?.status || ""] || before?.status || "—"} → ${statusLabels[data.status] || data.status}`, session);
   }
+  await writeAuditLog(supabase, session, "appointments.updated", "appointment", id, "Rendez-vous modifié", { previousStatus:before?.status ?? null, status:data.status, startsAt:data.starts_at });
   return NextResponse.json({ appointment: data });
 }
 
 export async function DELETE(request: Request) {
-  const { error, supabase } = requireAdmin(request);
+  const { error, supabase, session } = requireAdmin(request, "appointments.write");
   if (error || !supabase) return error;
   const id = new URL(request.url).searchParams.get("id") ?? "";
   if (!id) return NextResponse.json({ error: "Identifiant manquant." }, { status: 422 });
   const { data: before } = await supabase.from("website_appointments").select("lead_id,starts_at").eq("id", id).maybeSingle();
   const { error: deleteError } = await supabase.from("website_appointments").delete().eq("id", id);
   if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
-  if (before?.lead_id) await logMeeting(supabase, before.lead_id, "Rendez-vous supprimé", before.starts_at ? new Date(before.starts_at).toLocaleString("fr-FR") : null);
+  if (before?.lead_id) await logMeeting(supabase, before.lead_id, "Rendez-vous supprimé", before.starts_at ? new Date(before.starts_at).toLocaleString("fr-FR") : null, session);
+  await writeAuditLog(supabase, session, "appointments.deleted", "appointment", id, "Rendez-vous supprimé", { leadId:before?.lead_id ?? null, startsAt:before?.starts_at ?? null });
   return NextResponse.json({ ok: true });
 }
