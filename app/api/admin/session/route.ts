@@ -37,6 +37,10 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char] ?? char));
 }
 
+function metadataOf(value: unknown) {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
 async function sendMfaEmail(email: string, name: string, code: string) {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.BREVO_SENDER_EMAIL;
@@ -83,7 +87,36 @@ export async function POST(request: Request) {
 
       if (user) {
         if (!user.active) return NextResponse.json({ error: "Ce compte est désactivé." }, { status: 403 });
-        if (!verifyAdminPassword(password, user.password_hash)) return NextResponse.json({ error: "Identifiants incorrects." }, { status: 401 });
+
+        const metadata = metadataOf(user.metadata);
+        const lockedUntil = typeof metadata.locked_until === "string" ? new Date(metadata.locked_until) : null;
+        if (lockedUntil && lockedUntil.getTime() > Date.now()) {
+          return NextResponse.json({ error: "Trop de tentatives. Réessayez dans quelques minutes." }, { status: 429 });
+        }
+
+        if (!verifyAdminPassword(password, user.password_hash)) {
+          const attempts = Number.isFinite(Number(metadata.failed_login_attempts)) ? Number(metadata.failed_login_attempts) + 1 : 1;
+          const shouldLock = attempts >= 5;
+          const nextMetadata = {
+            ...metadata,
+            failed_login_attempts: shouldLock ? 0 : attempts,
+            locked_until: shouldLock ? new Date(Date.now() + 15 * 60_000).toISOString() : null,
+          };
+          await supabase.from("control_center_users").update({ metadata: nextMetadata, updated_at: new Date().toISOString() }).eq("id", user.id);
+          try {
+            await supabase.from("control_center_audit_logs").insert({
+              actor_user_id: user.id,
+              actor_email: user.email,
+              actor_name: user.full_name,
+              action: shouldLock ? "login.locked" : "login.failed",
+              entity_type: "session",
+              entity_id: user.id,
+              summary: shouldLock ? "Compte temporairement verrouillé après plusieurs échecs de connexion" : "Échec de connexion au Control Center",
+              metadata: { failedAttempts: shouldLock ? 5 : attempts },
+            });
+          } catch {}
+          return NextResponse.json({ error: shouldLock ? "Trop de tentatives. Le compte est verrouillé pendant 15 minutes." : "Identifiants incorrects." }, { status: shouldLock ? 429 : 401 });
+        }
 
         const { data: role } = await supabase
           .from("control_center_roles")
@@ -93,8 +126,9 @@ export async function POST(request: Request) {
         if (!role) return NextResponse.json({ error: "Le rôle de ce compte est introuvable." }, { status: 403 });
 
         const permissions = Array.isArray(role.permissions) ? role.permissions.filter((value): value is string => typeof value === "string") : [];
-        const metadata = user.metadata && typeof user.metadata === "object" ? user.metadata as Record<string, unknown> : {};
+        const cleanMetadata = { ...metadata, failed_login_attempts: 0, locked_until: null };
         const mfaRequired = isGlobalMfaRequired() || metadata.mfa_required === true;
+        await supabase.from("control_center_users").update({ metadata: cleanMetadata, updated_at: new Date().toISOString() }).eq("id", user.id);
 
         if (mfaRequired) {
           if (!process.env.BREVO_API_KEY || !process.env.BREVO_SENDER_EMAIL) {
@@ -176,7 +210,23 @@ export async function POST(request: Request) {
   return sessionResponse(token, { ok: true, session: founder, bootstrap: true });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const session = getAdminSession(request);
+  const supabase = getSupabaseAdmin();
+  if (session && supabase) {
+    try {
+      await supabase.from("control_center_audit_logs").insert({
+        actor_user_id: !session.legacy && session.sub !== "legacy-founder" ? session.sub : null,
+        actor_email: session.email,
+        actor_name: session.name,
+        actor_role: session.role,
+        action: "logout",
+        entity_type: "session",
+        entity_id: session.sub,
+        summary: "Déconnexion du Control Center",
+      });
+    } catch {}
+  }
   const response = NextResponse.json({ ok: true });
   response.cookies.set(ADMIN_COOKIE, "", { httpOnly: true, sameSite: "lax", path: "/", maxAge: 0 });
   return response;
