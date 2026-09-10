@@ -7,6 +7,7 @@ import {
   hashAdminPassword,
   verifyAdminPassword,
 } from "@/lib/admin-auth";
+import { revokeUserSessions } from "@/lib/control-center-sessions";
 
 function setSessionCookie(response: NextResponse, token: string) {
   response.cookies.set(ADMIN_COOKIE, token, {
@@ -31,15 +32,16 @@ export async function GET(request: Request) {
         role: session.role,
         legacy: true,
         mfaRequired: false,
+        mustChangePassword: false,
         lastLoginAt: null,
       },
-      session: { exp: session.exp, mfa: session.mfa ?? false },
+      session: { sid: session.sid ?? null, exp: session.exp, mfa: session.mfa ?? false },
     });
   }
 
   const { data: user, error: userError } = await supabase
     .from("control_center_users")
-    .select("id,full_name,email,active,last_login_at,metadata,role_id")
+    .select("id,full_name,email,active,last_login_at,metadata,role_id,must_change_password")
     .eq("id", session.sub)
     .maybeSingle();
   if (userError) return NextResponse.json({ error: userError.message }, { status: 500 });
@@ -54,9 +56,10 @@ export async function GET(request: Request) {
       role: session.role,
       legacy: false,
       mfaRequired: metadata.mfa_required === true,
+      mustChangePassword: Boolean(user.must_change_password),
       lastLoginAt: user.last_login_at,
     },
-    session: { exp: session.exp, mfa: session.mfa ?? false },
+    session: { sid: session.sid ?? null, exp: session.exp, mfa: session.mfa ?? false },
   });
 }
 
@@ -72,7 +75,7 @@ export async function PATCH(request: Request) {
 
   const { data: user, error: userError } = await supabase
     .from("control_center_users")
-    .select("id,full_name,email,password_hash,active,metadata")
+    .select("id,full_name,email,password_hash,active,metadata,must_change_password")
     .eq("id", session.sub)
     .maybeSingle();
   if (userError) return NextResponse.json({ error: userError.message }, { status: 500 });
@@ -99,7 +102,9 @@ export async function PATCH(request: Request) {
     if (nextPassword.length < 12) return NextResponse.json({ error: "Le nouveau mot de passe doit contenir au moins 12 caractères." }, { status: 422 });
     if (currentPassword === nextPassword) return NextResponse.json({ error: "Choisissez un nouveau mot de passe différent du précédent." }, { status: 422 });
     patch.password_hash = hashAdminPassword(nextPassword);
+    patch.must_change_password = false;
     changes.passwordChanged = true;
+    changes.mustChangePasswordCleared = Boolean(user.must_change_password);
   }
 
   if (Object.keys(patch).length === 1) return NextResponse.json({ error: "Aucune modification à enregistrer." }, { status: 422 });
@@ -108,11 +113,12 @@ export async function PATCH(request: Request) {
     .from("control_center_users")
     .update(patch)
     .eq("id", session.sub)
-    .select("id,full_name,email,metadata,last_login_at")
+    .select("id,full_name,email,metadata,last_login_at,must_change_password")
     .single();
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  await writeAuditLog(supabase, session, "account.security_updated", "control_center_user", session.sub, "Profil ou sécurité du compte mis à jour", changes);
+  if (changes.passwordChanged) await revokeUserSessions(supabase, session.sub);
+  await writeAuditLog(supabase, session, "account.security_updated", "control_center_user", session.sub, "Profil ou sécurité du compte mis à jour", { ...changes, sessionsRevoked: Boolean(changes.passwordChanged) });
 
   const response = NextResponse.json({
     ok: true,
@@ -123,6 +129,7 @@ export async function PATCH(request: Request) {
       email: updated.email,
       role: session.role,
       mfaRequired: Boolean((updated.metadata as Record<string, unknown> | null)?.mfa_required),
+      mustChangePassword: Boolean(updated.must_change_password),
       lastLoginAt: updated.last_login_at,
     },
   });
@@ -136,8 +143,10 @@ export async function PATCH(request: Request) {
       name: updated.full_name,
       role: session.role,
       permissions: session.permissions,
+      sid: session.sid,
       legacy: session.legacy,
       mfa: session.mfa,
+      mustChangePassword: session.mustChangePassword,
     });
     if (token) setSessionCookie(response, token);
   }
