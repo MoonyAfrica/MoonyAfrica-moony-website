@@ -5,6 +5,7 @@ import { syncCustomerSuccessEscalations } from "@/lib/crm-escalations";
 import { syncExecutivePortfolioAlerts } from "@/lib/crm-executive-portfolio";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
+import { syncRevenueForecastAlerts } from "@/lib/crm-revenue-forecast";
 import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
@@ -54,6 +55,8 @@ export async function GET(request: Request) {
     let executivePortfolioError: string | null = null;
     let escalations: Awaited<ReturnType<typeof syncCustomerSuccessEscalations>> | null = null;
     let escalationsError: string | null = null;
+    let revenueForecast: Awaited<ReturnType<typeof syncRevenueForecastAlerts>> | null = null;
+    let revenueForecastError: string | null = null;
     if (!customerSuccessError) {
       try { retention = await runRetentionAutomations(supabase); }
       catch (error) { retentionError = error instanceof Error ? error.message : "Automatisations de rétention indisponibles."; }
@@ -67,6 +70,8 @@ export async function GET(request: Request) {
       }
       try { escalations = await syncCustomerSuccessEscalations(supabase); }
       catch (error) { escalationsError = error instanceof Error ? error.message : "Escalades Customer Success indisponibles."; }
+      try { revenueForecast = await syncRevenueForecastAlerts(supabase); }
+      catch (error) { revenueForecastError = error instanceof Error ? error.message : "Renewal Desk indisponible."; }
     }
 
     const [scheduled, delayed] = await Promise.all([
@@ -85,8 +90,9 @@ export async function GET(request: Request) {
     const accountGovernanceFailed = Boolean(accountGovernanceError || (accountGovernance?.available && accountGovernance.errors.length));
     const executivePortfolioFailed = Boolean(executivePortfolioError || (executivePortfolio?.available && executivePortfolio.errors.length));
     const escalationsFailed = Boolean(escalationsError || (escalations?.available && escalations.errors.length));
+    const revenueForecastFailed = Boolean(revenueForecastError || (revenueForecast?.available && revenueForecast.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -106,6 +112,8 @@ export async function GET(request: Request) {
       executivePortfolioError,
       escalations,
       escalationsError,
+      revenueForecast,
+      revenueForecastError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });

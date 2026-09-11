@@ -111,12 +111,13 @@ export async function GET(request: Request) {
 
   const generated = await supabase.from("control_center_generated_notifications").select("id,target_role,target_user_key,title,subtitle,href,severity,source_type,source_id,created_at,expires_at").order("created_at", { ascending: false }).limit(100);
   if (!generated.error) {
+    const crmSources = ["crm_proposal","crm_onboarding","crm_customer_success","crm_retention","crm_success_plan","crm_account_governance","crm_executive_portfolio","crm_escalation","crm_revenue_forecast"];
     for (const item of generated.data ?? []) {
       if (item.expires_at && new Date(item.expires_at).getTime() <= now.getTime()) continue;
       const targeted = (!item.target_role && !item.target_user_key) || item.target_role === session.role || item.target_user_key === session.sub;
       if (!targeted) continue;
-      if(["crm_proposal","crm_onboarding","crm_customer_success","crm_retention","crm_success_plan","crm_account_governance","crm_executive_portfolio","crm_escalation"].includes(item.source_type) && !hasAdminPermission(session,"crm.read")) continue;
-      const kind: NotificationKind = item.source_type === "support_ticket" ? "ticket" : item.source_type === "appointment" ? "appointment" : item.source_type === "lead" ? "lead" : item.source_type === "crm_proposal" ? "proposal" : item.source_type === "crm_onboarding" ? "onboarding" : ["crm_customer_success","crm_retention","crm_success_plan","crm_account_governance","crm_executive_portfolio","crm_escalation"].includes(item.source_type) ? "client" : "content";
+      if(crmSources.includes(item.source_type) && !hasAdminPermission(session,"crm.read")) continue;
+      const kind: NotificationKind = item.source_type === "support_ticket" ? "ticket" : item.source_type === "appointment" ? "appointment" : item.source_type === "lead" ? "lead" : item.source_type === "crm_proposal" ? "proposal" : item.source_type === "crm_onboarding" ? "onboarding" : crmSources.includes(item.source_type) ? "client" : "content";
       items.push({ id:`auto-${item.id}`, kind, title:item.title, subtitle:item.subtitle || "Automatisation MOONY", href:item.href || "/admin/activite", severity:item.severity === "urgent" ? "urgent" : item.severity === "warning" ? "warning" : "info", createdAt:item.created_at });
     }
   }
