@@ -10,22 +10,27 @@ function boundedInt(value:unknown,fallback:number,min:number,max:number){const p
 export async function GET(request:Request){
   const {error,supabase,session}=requireAdmin(request,"crm.read");if(error||!supabase)return error;
   const [result,settingsResult]=await Promise.all([
-    supabase.from("website_crm_proposals").select("id,opportunity_id,reference,version,title,status,currency,total_amount,valid_until,created_at,sent_at,viewed_at,accepted_at,rejected_at,public_link_enabled,public_token_issued_at,sent_to_email,first_viewed_at,last_viewed_at,view_count,responded_at,response_name,response_email,response_message,last_reminder_at,reminder_count,viewed_followup_sent_at,expiry_reminder_sent_at,expired_at,website_crm_opportunities(id,lead_id,name,stage,owner,website_leads(id,first_name,last_name,email,company,country))").order("created_at",{ascending:false}).limit(500),
+    supabase.from("website_crm_proposals").select("id,opportunity_id,reference,version,title,status,currency,total_amount,valid_until,created_at,sent_at,viewed_at,accepted_at,rejected_at,public_link_enabled,public_token_issued_at,sent_to_email,first_viewed_at,last_viewed_at,view_count,responded_at,response_name,response_email,response_message,website_crm_opportunities(id,lead_id,name,stage,owner,website_leads(id,first_name,last_name,email,company,country))").order("created_at",{ascending:false}).limit(500),
     supabase.from("website_crm_proposal_followup_settings").select("auto_reminders,viewed_followup_hours,expiry_reminder_hours,max_reminders,updated_at,updated_by").eq("id","default").maybeSingle(),
   ]);
   if(result.error){
     if(["42P01","42703"].includes(result.error.code||""))return NextResponse.json({available:false,proposals:[],metrics:{total:0,awaiting:0,viewed:0,accepted:0,expired:0},followupAvailable:false,followupSettings:{autoReminders:false,viewedFollowupHours:48,expiryReminderHours:48,maxReminders:2}});
     return NextResponse.json({error:result.error.message},{status:500});
   }
+  const followupAvailable=!settingsResult.error;const ids=(result.data??[]).map((row)=>String(row.id));
+  const reminderState=followupAvailable&&ids.length?await supabase.from("website_crm_proposals").select("id,last_reminder_at,reminder_count,viewed_followup_sent_at,expiry_reminder_sent_at,expired_at").in("id",ids):{data:[],error:null};
+  const reminderById=new Map<string,any>();for(const row of reminderState.data??[])reminderById.set(String(row.id),row);
   const canWrite=hasAdminPermission(session,"crm.write");const rows=[] as any[];const expiredIds:string[]=[];
   for(const proposal of result.data??[]){
-    const opportunity=relation(proposal.website_crm_opportunities);const lead=relation(opportunity?.website_leads);const effectiveStatus=effectiveProposalStatus(String(proposal.status),proposal.valid_until);
+    const opportunity=relation(proposal.website_crm_opportunities);const lead=relation(opportunity?.website_leads);const effectiveStatus=effectiveProposalStatus(String(proposal.status),proposal.valid_until);const reminder=reminderById.get(String(proposal.id))||{};
     if(effectiveStatus==="expired"&&proposal.status!=="expired"&&proposalIsExpired(proposal.valid_until))expiredIds.push(String(proposal.id));
-    rows.push({...proposal,effective_status:effectiveStatus,website_crm_opportunities:opportunity?{...opportunity,website_leads:lead}:null});
+    rows.push({...proposal,...reminder,last_reminder_at:reminder.last_reminder_at??null,reminder_count:Number(reminder.reminder_count||0),viewed_followup_sent_at:reminder.viewed_followup_sent_at??null,expiry_reminder_sent_at:reminder.expiry_reminder_sent_at??null,effective_status:effectiveStatus,website_crm_opportunities:opportunity?{...opportunity,website_leads:lead}:null});
   }
-  if(canWrite&&expiredIds.length)await supabase.from("website_crm_proposals").update({status:"expired",expired_at:new Date().toISOString(),updated_at:new Date().toISOString()}).in("id",expiredIds).in("status",["draft","sent","viewed"]);
+  if(canWrite&&expiredIds.length){
+    const stamp=new Date().toISOString();await supabase.from("website_crm_proposals").update({status:"expired",updated_at:stamp}).in("id",expiredIds).in("status",["draft","sent","viewed"]);
+    if(followupAvailable)await supabase.from("website_crm_proposals").update({expired_at:stamp}).in("id",expiredIds);
+  }
   const metrics={total:rows.length,awaiting:rows.filter((row)=>["sent","viewed"].includes(row.effective_status)).length,viewed:rows.filter((row)=>Number(row.view_count||0)>0).length,accepted:rows.filter((row)=>row.effective_status==="accepted").length,expired:rows.filter((row)=>row.effective_status==="expired").length};
-  const followupAvailable=!settingsResult.error;
   const settings=settingsResult.data||{auto_reminders:false,viewed_followup_hours:48,expiry_reminder_hours:48,max_reminders:2,updated_at:null,updated_by:null};
   return NextResponse.json({available:true,proposals:rows,metrics,followupAvailable,followupSettings:{autoReminders:Boolean(settings.auto_reminders),viewedFollowupHours:Number(settings.viewed_followup_hours||48),expiryReminderHours:Number(settings.expiry_reminder_hours||48),maxReminders:Number(settings.max_reminders??2),updatedAt:settings.updated_at??null,updatedBy:settings.updated_by??null},integrations:{brevoConfigured:Boolean(process.env.BREVO_API_KEY&&process.env.BREVO_SENDER_EMAIL),cronConfigured:Boolean(process.env.AUTOMATION_CRON_SECRET||process.env.CRON_SECRET)}});
 }
