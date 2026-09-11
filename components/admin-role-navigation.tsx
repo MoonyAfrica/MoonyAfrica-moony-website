@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Activity, BarChart3, BookOpen, BookOpenCheck, Briefcase, Building2, CalendarDays, ClipboardCheck, ClipboardList, FileText, Flame, FolderOpen, Gauge, Handshake, History,
+  Activity, BarChart3, BookOpen, BookOpenCheck, Briefcase, Building2, CalendarDays, ClipboardCheck, ClipboardList, FileText, Flame, FolderOpen, Gauge, Handshake, HeartPulse, History,
   Image as ImageIcon, LayoutDashboard, Mail, Megaphone, Menu, MessageCircleMore, Palette, Rocket, Settings,
   ShieldCheck, Sparkles, Target, TrendingUp, UserCog, Users, Zap,
 } from "lucide-react";
@@ -31,6 +31,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Portails clients","/admin/onboarding/portails",ShieldCheck,"crm.read"],
   ["Readiness","/admin/readiness",Rocket,"crm.read"],
   ["Clients actifs","/admin/clients",Building2,"crm.read"],
+  ["Customer Success","/admin/customer-success",HeartPulse,"crm.read"],
   ["Scoring","/admin/scoring",Flame,"crm.read"],
   ["Playbooks","/admin/playbooks",BookOpenCheck,"crm.read"],
   ["Prévisions","/admin/previsions",TrendingUp,"crm.read"],
