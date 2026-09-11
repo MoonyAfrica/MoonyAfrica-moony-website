@@ -40,6 +40,10 @@ export async function GET(request:Request){
     const stakeholders=await supabase.from("website_crm_account_stakeholders").select("id,client_id,name,email,role_title,stakeholder_role,website_crm_client_accounts(account_name)").eq("is_active",true).or(`name.ilike.${pattern},email.ilike.${pattern},role_title.ilike.${pattern}`).limit(8);
     if(stakeholders.error&&!['42P01','42703'].includes(stakeholders.error.code||""))partialErrors.push(stakeholders.error.message);
     for(const contact of stakeholders.data??[]){const account=Array.isArray(contact.website_crm_client_accounts)?contact.website_crm_client_accounts[0]:contact.website_crm_client_accounts;results.push({id:`stakeholder-${contact.id}`,kind:"Interlocuteur compte",title:contact.name,subtitle:`${account?.account_name||"Compte client"}${contact.role_title?` · ${contact.role_title}`:""}${contact.email?` · ${contact.email}`:""}`,href:`/admin/customer-success/governance?client=${contact.client_id}`})}
+
+    const escalations=await supabase.from("website_crm_escalation_cases").select("id,client_id,title,summary,status,severity,owner,website_crm_client_accounts(account_name)").or(`title.ilike.${pattern},summary.ilike.${pattern},owner.ilike.${pattern}`).limit(8);
+    if(escalations.error&&!['42P01','42703'].includes(escalations.error.code||""))partialErrors.push(escalations.error.message);
+    for(const item of escalations.data??[]){const account=Array.isArray(item.website_crm_client_accounts)?item.website_crm_client_accounts[0]:item.website_crm_client_accounts;results.push({id:`escalation-${item.id}`,kind:"Escalade CS",title:item.title,subtitle:`${account?.account_name||"Compte client"} · ${item.severity} · ${item.status}${item.owner?` · ${item.owner}`:""}`,href:`/admin/customer-success/escalations?case=${item.id}`})}
   }
 
   if(hasAdminPermission(session,"site.read")){

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
 import { syncAccountGovernance } from "@/lib/crm-account-governance";
+import { syncCustomerSuccessEscalations } from "@/lib/crm-escalations";
 import { syncExecutivePortfolioAlerts } from "@/lib/crm-executive-portfolio";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
@@ -51,6 +52,8 @@ export async function GET(request: Request) {
     let accountGovernanceError: string | null = null;
     let executivePortfolio: Awaited<ReturnType<typeof syncExecutivePortfolioAlerts>> | null = null;
     let executivePortfolioError: string | null = null;
+    let escalations: Awaited<ReturnType<typeof syncCustomerSuccessEscalations>> | null = null;
+    let escalationsError: string | null = null;
     if (!customerSuccessError) {
       try { retention = await runRetentionAutomations(supabase); }
       catch (error) { retentionError = error instanceof Error ? error.message : "Automatisations de rétention indisponibles."; }
@@ -62,6 +65,8 @@ export async function GET(request: Request) {
         try { executivePortfolio = await syncExecutivePortfolioAlerts(supabase); }
         catch (error) { executivePortfolioError = error instanceof Error ? error.message : "Alertes du portefeuille exécutif indisponibles."; }
       }
+      try { escalations = await syncCustomerSuccessEscalations(supabase); }
+      catch (error) { escalationsError = error instanceof Error ? error.message : "Escalades Customer Success indisponibles."; }
     }
 
     const [scheduled, delayed] = await Promise.all([
@@ -79,8 +84,9 @@ export async function GET(request: Request) {
     const successPlansFailed = Boolean(successPlansError || (successPlans?.available && successPlans.errors.length));
     const accountGovernanceFailed = Boolean(accountGovernanceError || (accountGovernance?.available && accountGovernance.errors.length));
     const executivePortfolioFailed = Boolean(executivePortfolioError || (executivePortfolio?.available && executivePortfolio.errors.length));
+    const escalationsFailed = Boolean(escalationsError || (escalations?.available && escalations.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -98,6 +104,8 @@ export async function GET(request: Request) {
       accountGovernanceError,
       executivePortfolio,
       executivePortfolioError,
+      escalations,
+      escalationsError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });

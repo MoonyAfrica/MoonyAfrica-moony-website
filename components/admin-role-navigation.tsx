@@ -33,6 +33,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Clients actifs","/admin/clients",Building2,"crm.read"],
   ["Customer Success","/admin/customer-success",HeartPulse,"crm.read"],
   ["Portefeuille CS","/admin/customer-success/portfolio",BarChart3,"crm.read"],
+  ["Escalades CS","/admin/customer-success/escalations",Flame,"crm.read"],
   ["Plans de succès","/admin/customer-success/plans",Target,"crm.read"],
   ["Gouvernance compte","/admin/customer-success/governance",Network,"crm.read"],
   ["Rétention auto","/admin/customer-success/retention",Zap,"crm.read"],
