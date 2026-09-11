@@ -64,6 +64,8 @@ export async function ensureCrmOnboarding(supabase:any,input:EnsureInput){
   {template_key:"go-live-readiness",title:"Contrôler les prérequis avant mise en service",category:"launch",status:"todo",required:true,due_at:datePlus(14),sort_order:60},
  ];
  await supabase.from("website_crm_onboarding_tasks").insert(tasks.map((row)=>({...row,onboarding_id:onboarding.id})));
+ // V7.1 only: this update is intentionally best-effort so CRM V7 remains usable before the portal migration is applied.
+ await supabase.from("website_crm_onboarding_tasks").update({client_visible:true}).eq("onboarding_id",onboarding.id).in("template_key",["documents-collect","kickoff-schedule","implementation-plan","go-live-readiness"]);
 
  const documents=[
   {name:"Identité juridique de l'organisation",description:"Dénomination, adresse, identifiants légaux utiles au contrat et à la facturation.",status:"required",required:true,due_at:datePlus(5)},
