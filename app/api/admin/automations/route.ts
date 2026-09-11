@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
 
-const triggers = new Set(["new_lead", "urgent_ticket", "appointment_reminder", "stale_lead"]);
+const triggers = new Set(["new_lead", "urgent_ticket", "appointment_reminder", "stale_lead", "lead_tag_added", "segment_match"]);
 const actionTypes = new Set(["create_crm_task", "notify_role", "send_email", "update_lead_stage", "add_crm_note", "run_rule"]);
 const priorities = new Set(["low", "normal", "high", "urgent"]);
 const severities = new Set(["info", "warning", "urgent"]);
@@ -12,9 +12,13 @@ async function bodyOf(request: Request) {
   try { return await request.json() as Record<string, unknown>; } catch { return null; }
 }
 
-function textList(value: unknown, maxItems = 30, maxLength = 120) {
+function textList(value: unknown, maxItems = 30, maxLength = 120, lowerCase = true) {
   if (!Array.isArray(value)) return [];
-  return value.map((item) => asText(item, maxLength).toLowerCase()).filter(Boolean).slice(0, maxItems);
+  return value
+    .map((item) => asText(item, maxLength))
+    .map((item) => lowerCase ? item.toLowerCase() : item)
+    .filter(Boolean)
+    .slice(0, maxItems);
 }
 
 function numberBetween(value: unknown, min: number, max: number, fallback?: number) {
@@ -31,6 +35,11 @@ function normalizeConditions(value: unknown) {
     const items = textList(source[key]);
     if (items.length) result[key] = items;
   }
+  const tagIds = textList(source.tag_ids, 50, 80, false);
+  const segmentIds = textList(source.segment_ids, 30, 80, false);
+  if (tagIds.length) result.tag_ids = tagIds;
+  if (segmentIds.length) result.segment_ids = segmentIds;
+
   const hoursBefore = numberBetween(source.hours_before, 1, 168);
   const daysWithoutContact = numberBetween(source.days_without_contact, 1, 90);
   const minDeal = numberBetween(source.min_deal_value, 0, 1_000_000_000);
@@ -108,6 +117,20 @@ function defaultDefinition(trigger: string) {
   if (trigger === "stale_lead") return {
     conditions: { days_without_contact: 5 },
     actions: [{ type: "create_crm_task", title: "Relancer {{lead}}", due_in_hours: 4, priority: "normal", delay_hours: 0 }, { type: "notify_role", role: "sales", title: "Prospect à relancer", subtitle: "{{lead}} n’a pas eu de suivi récent.", href: "/admin/crm?lead={{lead_id}}", severity: "warning", delay_hours: 0 }],
+  };
+  if (trigger === "lead_tag_added") return {
+    conditions: {},
+    actions: [
+      { type: "create_crm_task", title: "Suivre {{lead}}", due_in_hours: 24, priority: "high", delay_hours: 0 },
+      { type: "notify_role", role: "sales", title: "Prospect tagué à suivre", subtitle: "{{lead}} vient d’entrer dans un ciblage CRM.", href: "/admin/crm?lead={{lead_id}}", severity: "info", delay_hours: 0 },
+    ],
+  };
+  if (trigger === "segment_match") return {
+    conditions: {},
+    actions: [
+      { type: "create_crm_task", title: "Traiter {{lead}} dans le segment ciblé", due_in_hours: 24, priority: "normal", delay_hours: 0 },
+      { type: "notify_role", role: "sales", title: "Prospect dans un segment prioritaire", subtitle: "{{lead}} correspond au segment CRM ciblé.", href: "/admin/crm?lead={{lead_id}}", severity: "info", delay_hours: 0 },
+    ],
   };
   return {
     conditions: { statuses: ["new", "to_contact"] },
