@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { asNullableText, asText, requireAdmin, writeAuditLog } from "@/lib/admin-api";
+import { triggerLeadTagAddedAutomationEvents } from "@/lib/automation-engine";
 
 const statuses = new Set(["new","to_contact","contacted","appointment","proposal","negotiation","won","lost"]);
 const priorities = new Set(["low","normal","high","urgent"]);
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     const { error: tagError } = await supabase.from("website_crm_lead_tags").upsert(rows, { onConflict: "lead_id,tag_id", ignoreDuplicates: true });
     if (tagError) return NextResponse.json({ error: tagError.message }, { status: 500 });
     await writeAuditLog(supabase, session, "crm.bulk_tag_added", "lead_batch", null, `Tag ajouté à ${ids.length} prospect(s)`, { ids, tagId });
+    try { await triggerLeadTagAddedAutomationEvents(supabase, ids, tagId); } catch {}
     return NextResponse.json({ ok: true, affected: ids.length });
   }
 
