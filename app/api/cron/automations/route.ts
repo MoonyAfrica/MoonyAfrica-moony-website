@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
+import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -27,6 +28,11 @@ export async function GET(request: Request) {
     try { proposalFollowups = await runProposalFollowups(supabase); }
     catch (error) { proposalFollowupError = error instanceof Error ? error.message : "Relances de propositions indisponibles."; }
 
+    let onboardingSync: Awaited<ReturnType<typeof syncWonOpportunitiesToOnboarding>> | null = null;
+    let onboardingError: string | null = null;
+    try { onboardingSync = await syncWonOpportunitiesToOnboarding(supabase); }
+    catch (error) { onboardingError = error instanceof Error ? error.message : "Synchronisation onboarding indisponible."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -36,13 +42,16 @@ export async function GET(request: Request) {
     const failed = results.filter((item) => item.status === "failed").length;
     const skipped = results.filter((item) => item.status === "skipped").length;
     const followupFailed = Boolean(proposalFollowupError || (proposalFollowups?.available && proposalFollowups.errors.length));
+    const onboardingFailed = Boolean(onboardingError || (onboardingSync?.available && onboardingSync.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
       proposalFollowups,
       proposalFollowupError,
+      onboardingSync,
+      onboardingError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
