@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
+import { syncAccountGovernance } from "@/lib/crm-account-governance";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
 import { runRetentionAutomations } from "@/lib/crm-retention-automations";
@@ -45,11 +46,15 @@ export async function GET(request: Request) {
     let retentionError: string | null = null;
     let successPlans: Awaited<ReturnType<typeof syncSuccessPlanReviews>> | null = null;
     let successPlansError: string | null = null;
+    let accountGovernance: Awaited<ReturnType<typeof syncAccountGovernance>> | null = null;
+    let accountGovernanceError: string | null = null;
     if (!customerSuccessError) {
       try { retention = await runRetentionAutomations(supabase); }
       catch (error) { retentionError = error instanceof Error ? error.message : "Automatisations de rétention indisponibles."; }
       try { successPlans = await syncSuccessPlanReviews(supabase); }
       catch (error) { successPlansError = error instanceof Error ? error.message : "Préparation des revues clients indisponible."; }
+      try { accountGovernance = await syncAccountGovernance(supabase); }
+      catch (error) { accountGovernanceError = error instanceof Error ? error.message : "Gouvernance des comptes indisponible."; }
     }
 
     const [scheduled, delayed] = await Promise.all([
@@ -65,8 +70,9 @@ export async function GET(request: Request) {
     const customerSuccessFailed = Boolean(customerSuccessError || (customerSuccess?.available && customerSuccess.errors.length));
     const retentionFailed = Boolean(retentionError || (retention?.available && retention.errors.length));
     const successPlansFailed = Boolean(successPlansError || (successPlans?.available && successPlans.errors.length));
+    const accountGovernanceFailed = Boolean(accountGovernanceError || (accountGovernance?.available && accountGovernance.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -80,6 +86,8 @@ export async function GET(request: Request) {
       retentionError,
       successPlans,
       successPlansError,
+      accountGovernance,
+      accountGovernanceError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
