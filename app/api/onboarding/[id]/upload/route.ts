@@ -36,5 +36,5 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const now=new Date().toISOString();await supabase.from("website_crm_onboarding_documents").update({status:"received",document_url:`/api/admin/crm/onboarding/files/${documentId}`,updated_at:now}).eq("id",documentId);
   await supabase.from("website_crm_onboarding_events").insert({onboarding_id:id,event_type:"client_document_uploaded",title:"Document reçu du client",detail:`${requirement.data.name} · ${file.name}`,actor:submittedBy});
   await notify(supabase,id,"Document onboarding reçu",`${requirement.data.name} · ${file.name}`);
-  const document=await loadOnboardingPortalDocument(supabase,id);return json({ok:true,submissionId:inserted.data.id,document},{status:201});
+  const document=await loadOnboardingPortalDocument(supabase,id);return json({ok:true,submissionId:inserted.data.id,document},201);
 }
