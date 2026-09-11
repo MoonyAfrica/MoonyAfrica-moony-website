@@ -69,7 +69,7 @@ export async function POST(request: Request) {
         referer: request.headers.get("referer"),
       },
     })
-    .select("id,status,assigned_to")
+    .select("id,status,assigned_to,country,need,source,deal_value")
     .single();
 
   if (error) {
@@ -87,6 +87,10 @@ export async function POST(request: Request) {
       email,
       status: data.status || "new",
       assigned_to: data.assigned_to,
+      country: data.country,
+      need: data.need || need,
+      source: data.source || "website-contact-form",
+      deal_value: data.deal_value,
     });
   } catch {
     // A lead must never be lost because a non-critical automation could not run.
