@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { asText, requireAdmin } from "@/lib/admin-api";
 import { hasAdminPermission } from "@/lib/admin-auth";
 
-type NotificationKind = "task" | "lead" | "ticket" | "appointment" | "campaign" | "content" | "proposal";
+type NotificationKind = "task" | "lead" | "ticket" | "appointment" | "campaign" | "content" | "proposal" | "onboarding";
 type NotificationItem = {
   id: string;
   kind: NotificationKind;
@@ -115,8 +115,8 @@ export async function GET(request: Request) {
       if (item.expires_at && new Date(item.expires_at).getTime() <= now.getTime()) continue;
       const targeted = (!item.target_role && !item.target_user_key) || item.target_role === session.role || item.target_user_key === session.sub;
       if (!targeted) continue;
-      if(item.source_type === "crm_proposal" && !hasAdminPermission(session,"crm.read")) continue;
-      const kind: NotificationKind = item.source_type === "support_ticket" ? "ticket" : item.source_type === "appointment" ? "appointment" : item.source_type === "lead" ? "lead" : item.source_type === "crm_proposal" ? "proposal" : "content";
+      if(["crm_proposal","crm_onboarding"].includes(item.source_type) && !hasAdminPermission(session,"crm.read")) continue;
+      const kind: NotificationKind = item.source_type === "support_ticket" ? "ticket" : item.source_type === "appointment" ? "appointment" : item.source_type === "lead" ? "lead" : item.source_type === "crm_proposal" ? "proposal" : item.source_type === "crm_onboarding" ? "onboarding" : "content";
       items.push({ id:`auto-${item.id}`, kind, title:item.title, subtitle:item.subtitle || "Automatisation MOONY", href:item.href || "/admin/activite", severity:item.severity === "urgent" ? "urgent" : item.severity === "warning" ? "warning" : "info", createdAt:item.created_at });
     }
   }
