@@ -106,7 +106,7 @@ function requiredPermissions(pathname: string): string[] | null {
   if (pathname === "/admin" || pathname.startsWith("/admin/mon-compte") || pathname.startsWith("/admin/activite")) return null;
   if (pathname.startsWith("/admin/equipe")) return ["team.manage"];
   if (pathname.startsWith("/admin/journal-activite")) return ["audit.read"];
-  if (pathname.startsWith("/admin/crm")) return ["crm.read"];
+  if (pathname.startsWith("/admin/crm") || pathname.startsWith("/admin/scoring") || pathname.startsWith("/admin/previsions") || pathname.startsWith("/admin/playbooks")) return ["crm.read"];
   if (pathname.startsWith("/admin/rendez-vous")) return ["appointments.read"];
   if (pathname.startsWith("/admin/service-client")) return ["support.read"];
   if (pathname.startsWith("/admin/marketing") || pathname.startsWith("/admin/newsletters") || pathname.startsWith("/admin/popups")) return ["marketing.read"];
