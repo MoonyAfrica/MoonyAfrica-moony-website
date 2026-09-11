@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Activity, BarChart3, BookOpen, CalendarDays, ClipboardList, FileText, FolderOpen, Gauge, Handshake, History,
+  Activity, BarChart3, BookOpen, CalendarDays, ClipboardList, FileText, Flame, FolderOpen, Gauge, Handshake, History,
   Image as ImageIcon, LayoutDashboard, Mail, Megaphone, Menu, MessageCircleMore, Palette, Settings,
   ShieldCheck, Sparkles, Target, TrendingUp, UserCog, Users, Zap,
 } from "lucide-react";
@@ -25,6 +25,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
  ]},
  {label:"COMMERCIAL & RELATION CLIENT",items:[
   ["CRM","/admin/crm",Users,"crm.read"],
+  ["Scoring","/admin/scoring",Flame,"crm.read"],
   ["Prévisions","/admin/previsions",TrendingUp,"crm.read"],
   ["Rendez-vous","/admin/rendez-vous",CalendarDays,"appointments.read"],
   ["Service client","/admin/service-client",MessageCircleMore,"support.read"],
