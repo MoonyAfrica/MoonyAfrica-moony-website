@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
+import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -21,6 +22,11 @@ export async function GET(request: Request) {
     try { scoring = await syncCrmScoreTags(supabase); }
     catch (error) { scoringError = error instanceof Error ? error.message : "Synchronisation scoring indisponible."; }
 
+    let proposalFollowups: Awaited<ReturnType<typeof runProposalFollowups>> | null = null;
+    let proposalFollowupError: string | null = null;
+    try { proposalFollowups = await runProposalFollowups(supabase); }
+    catch (error) { proposalFollowupError = error instanceof Error ? error.message : "Relances de propositions indisponibles."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -30,10 +36,12 @@ export async function GET(request: Request) {
     const failed = results.filter((item) => item.status === "failed").length;
     const skipped = results.filter((item) => item.status === "skipped").length;
     return NextResponse.json({
-      ok: failed === 0 && !scoringError,
+      ok: failed === 0 && !scoringError && !proposalFollowupError && !(proposalFollowups?.errors.length),
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
+      proposalFollowups,
+      proposalFollowupError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
