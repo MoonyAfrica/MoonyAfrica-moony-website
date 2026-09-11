@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyCrmProposalEvent } from "@/lib/crm-proposal-followups";
 import { effectiveProposalStatus, loadProposalPortalDocument, proposalIsExpired, syncLeadFromOpportunities, verifyProposalToken } from "@/lib/crm-proposal-portal";
 
 function json(data:unknown,status=200){const response=NextResponse.json(data,{status});response.headers.set("Cache-Control","no-store, max-age=0");response.headers.set("Referrer-Policy","no-referrer");return response}
@@ -15,10 +16,11 @@ async function authorizedProposal(supabase:any,id:string,token:string){
 async function markExpired(supabase:any,proposal:any){
   if(!proposalIsExpired(proposal.valid_until)||["accepted","rejected","expired","superseded"].includes(String(proposal.status)))return proposal;
   const now=new Date().toISOString();
-  const updated=await supabase.from("website_crm_proposals").update({status:"expired",updated_at:now}).eq("id",proposal.id).select("*").single();
+  const updated=await supabase.from("website_crm_proposals").update({status:"expired",expired_at:now,updated_at:now}).eq("id",proposal.id).select("*").single();
   if(!updated.error){
     const opportunity=await supabase.from("website_crm_opportunities").select("lead_id").eq("id",proposal.opportunity_id).maybeSingle();
     await supabase.from("website_crm_opportunity_events").insert({opportunity_id:proposal.opportunity_id,lead_id:opportunity.data?.lead_id??null,event_type:"proposal_expired",title:"Proposition expirée",detail:`${proposal.reference} a atteint sa date de validité.`,actor:"MOONY System"});
+    await notifyCrmProposalEvent(supabase,{proposalId:String(proposal.id),opportunityId:String(proposal.opportunity_id),title:"Proposition expirée",subtitle:`${proposal.reference} a dépassé sa date de validité.`,severity:"warning"});
     return updated.data;
   }
   return {...proposal,status:"expired"};
@@ -38,6 +40,7 @@ export async function GET(request:Request,{params}:{params:Promise<{id:string}>}
     if(first){
       const opportunity=await supabase.from("website_crm_opportunities").select("lead_id").eq("id",proposal.opportunity_id).maybeSingle();
       await supabase.from("website_crm_opportunity_events").insert({opportunity_id:proposal.opportunity_id,lead_id:opportunity.data?.lead_id??null,event_type:"proposal_viewed",title:"Proposition consultée",detail:`${proposal.reference} a été consultée depuis le portail client.`,actor:"Client"});
+      await notifyCrmProposalEvent(supabase,{proposalId:id,opportunityId:String(proposal.opportunity_id),title:"Proposition consultée",subtitle:`${proposal.reference} vient d’être ouverte par le client.`,severity:"info"});
     }
   }
   const document=await loadProposalPortalDocument(supabase,id);if(!document)return json({error:"Proposition introuvable."},404);
@@ -70,6 +73,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     }
     await supabase.from("website_crm_opportunity_events").insert({opportunity_id:opportunity.data.id,lead_id:opportunity.data.lead_id,event_type:accepted?"proposal_accepted":"proposal_rejected",title:accepted?"Proposition acceptée par le client":"Proposition refusée par le client",detail:`${proposal.reference} · décision confirmée par ${name}${message?` · ${message}`:""}`,actor:name});
     await syncLeadFromOpportunities(supabase,opportunity.data.lead_id);
+    await notifyCrmProposalEvent(supabase,{proposalId:id,opportunityId:String(opportunity.data.id),title:accepted?"Proposition acceptée":"Proposition refusée",subtitle:`${proposal.reference} · ${name}${message?` · ${message}`:""}`,severity:accepted?"info":"warning"});
   }
   const document=await loadProposalPortalDocument(supabase,id);if(document)document.proposal.status=nextStatus;
   return json({ok:true,status:nextStatus,document});
