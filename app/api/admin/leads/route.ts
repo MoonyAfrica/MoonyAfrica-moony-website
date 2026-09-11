@@ -11,6 +11,14 @@ const stageLabels: Record<string,string> = {
 };
 const json = async (request: Request) => { try { return await request.json() as Record<string, unknown>; } catch { return null; } };
 
+type LeadTag = { id:string; name:string; slug:string; color:string };
+type LeadRow = Record<string, unknown> & {
+  id:string; first_name?:string; last_name?:string; email?:string; phone?:string|null; company?:string|null;
+  country?:string|null; city?:string|null; assigned_to?:string|null; source?:string; status?:string; need?:string;
+  deal_value?:number|null;
+};
+type EnrichedLead = LeadRow & { tags: LeadTag[] };
+
 async function logActivity(supabase: ReturnType<typeof requireAdmin>["supabase"], leadId:string, summary:string, body:string | null, session:AdminSession|null) {
   if (!supabase) return;
   await supabase.from("website_crm_activities").insert({
@@ -48,10 +56,10 @@ export async function GET(request: Request) {
 
   const leadsResult = await supabase.from("website_leads").select("*").order("updated_at", { ascending: false }).limit(500);
   if (leadsResult.error) return NextResponse.json({ error: leadsResult.error.message }, { status: 500 });
-  const rows = (leadsResult.data ?? []) as Array<Record<string, unknown>>;
+  const rows = (leadsResult.data ?? []) as LeadRow[];
 
   const ids = rows.map((row) => String(row.id));
-  const tagsByLead = new Map<string, Array<{id:string;name:string;slug:string;color:string}>>();
+  const tagsByLead = new Map<string, LeadTag[]>();
   let tagsAvailable = true;
   if (ids.length) {
     const tagResult = await supabase.from("website_crm_lead_tags").select("lead_id,tag_id,website_crm_tags(id,name,slug,color)").in("lead_id", ids);
@@ -60,14 +68,14 @@ export async function GET(request: Request) {
       for (const relation of tagResult.data ?? []) {
         const rawTag = Array.isArray(relation.website_crm_tags) ? relation.website_crm_tags[0] : relation.website_crm_tags;
         if (!rawTag) continue;
-        const tag = rawTag as {id:string;name:string;slug:string;color:string};
+        const tag = rawTag as LeadTag;
         const key = String(relation.lead_id);
         tagsByLead.set(key, [...(tagsByLead.get(key) ?? []), tag]);
       }
     }
   }
 
-  const enriched = rows.map((row) => ({ ...row, tags: tagsByLead.get(String(row.id)) ?? [] }));
+  const enriched: EnrichedLead[] = rows.map((row) => ({ ...row, tags: tagsByLead.get(String(row.id)) ?? [] }));
   const filtered = enriched.filter((lead) => {
     if (query) {
       const haystack = [lead.first_name, lead.last_name, lead.email, lead.company, lead.phone, lead.country, lead.city, lead.assigned_to, lead.source]
@@ -83,7 +91,7 @@ export async function GET(request: Request) {
     if (minValue !== null && dealValue < minValue) return false;
     if (maxValue !== null && dealValue > maxValue) return false;
     if (tagFilter.length) {
-      const owned = (lead.tags as Array<{id:string}>).map((tag) => tag.id);
+      const owned = lead.tags.map((tag) => tag.id);
       if (!tagFilter.every((tagId) => owned.includes(tagId))) return false;
     }
     return true;
