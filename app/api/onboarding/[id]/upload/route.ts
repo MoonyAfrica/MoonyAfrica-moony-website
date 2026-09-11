@@ -33,7 +33,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const upload=await supabase.storage.from(ONBOARDING_DOCUMENT_BUCKET).upload(path,bytes,{contentType:file.type,upsert:false,cacheControl:"3600"});if(upload.error)return json({error:"Impossible de stocker le document."},500);
   const inserted=await supabase.from("website_crm_onboarding_submissions").insert({onboarding_id:id,document_id:documentId,original_name:file.name,storage_path:path,mime_type:file.type,file_size:file.size,status:"received",submitted_by:submittedBy,submitted_email:submittedEmail}).select("id").single();
   if(inserted.error){await supabase.storage.from(ONBOARDING_DOCUMENT_BUCKET).remove([path]);return json({error:"Impossible d’enregistrer le document."},500)}
-  const now=new Date().toISOString();await supabase.from("website_crm_onboarding_documents").update({status:"received",document_url:`storage://${ONBOARDING_DOCUMENT_BUCKET}/${path}`,updated_at:now}).eq("id",documentId);
+  const now=new Date().toISOString();await supabase.from("website_crm_onboarding_documents").update({status:"received",document_url:`/api/admin/crm/onboarding/files/${documentId}`,updated_at:now}).eq("id",documentId);
   await supabase.from("website_crm_onboarding_events").insert({onboarding_id:id,event_type:"client_document_uploaded",title:"Document reçu du client",detail:`${requirement.data.name} · ${file.name}`,actor:submittedBy});
   await notify(supabase,id,"Document onboarding reçu",`${requirement.data.name} · ${file.name}`);
   const document=await loadOnboardingPortalDocument(supabase,id);return json({ok:true,submissionId:inserted.data.id,document},{status:201});
