@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   Activity, BarChart3, BookOpen, CalendarDays, ClipboardList, FileText, FolderOpen, Gauge, Handshake, History,
   Image as ImageIcon, LayoutDashboard, Mail, Megaphone, Menu, MessageCircleMore, Palette, Settings,
-  ShieldCheck, Sparkles, UserCog, Users, Zap,
+  ShieldCheck, Sparkles, Target, UserCog, Users, Zap,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -41,6 +41,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
  {label:"PERFORMANCE & SYSTÈME",items:[
   ["Centre d’activité","/admin/activite",Activity,null],
   ["Automatisations","/admin/automatisations",Zap,"settings.read"],
+  ["Ciblage CRM","/admin/automatisations/crm",Target,"settings.read"],
   ["Analytique","/admin/analytics",BarChart3,"analytics.read"],
   ["SEO","/admin/seo",Gauge,"seo.read"],
   ["Paramètres","/admin/parametres",Settings,"settings.read"],
