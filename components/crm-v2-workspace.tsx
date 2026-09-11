@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CalendarPlus, CheckCircle2, Columns3, Download, Filter, List, Mail, MessageCircle, Phone,
-  Plus, RefreshCw, Save, Search, Send, Tags, Trash2, Users, X,
+  Plus, RefreshCw, Save, Search, Send, Tags, Trash2, X,
 } from "lucide-react";
 import { AdminCard, AdminWorkspace } from "@/components/admin-workspace";
 
@@ -15,19 +15,26 @@ type Lead = {
   company:string|null; role_title:string|null; need:string; message:string|null; source:string; status:Status;
   assigned_to:string|null; deal_value:number|null; country:string|null; city:string|null; notes:string|null; last_contacted_at:string|null; tags:Tag[];
 };
+type ViewMode = "list"|"pipeline";
+type Filters = { query:string; statuses:string[]; countries:string[]; needs:string[]; assignees:string[]; sources:string[]; tagIds:string[]; minValue:string; maxValue:string };
 type Segment = { id:string; name:string; description:string|null; filters:Filters; view_config:{view?:ViewMode;sort?:string}; visibility:"team"|"private"; owner_user_key:string|null; is_pinned:boolean };
 type Activity = { id:string; created_at:string; kind:"note"|"call"|"email"|"whatsapp"|"meeting"|"status"|"proposal"|"system"; summary:string; body:string|null; outcome:string|null; created_by:string|null };
 type Task = { id:string; title:string; due_at:string|null; status:"todo"|"in_progress"|"done"|"cancelled"; priority:"low"|"normal"|"high"|"urgent"; assigned_to:string|null; notes:string|null };
-type ViewMode = "list"|"pipeline";
-type Filters = { query:string; statuses:string[]; countries:string[]; needs:string[]; assignees:string[]; sources:string[]; tagIds:string[]; minValue:string; maxValue:string };
 type Meta = { tags:Tag[]; segments:Segment[]; dimensions:{countries:string[];needs:string[];assignees:string[];sources:string[]}; tagsAvailable:boolean; segmentsAvailable:boolean };
+type DimensionKey = "countries"|"needs"|"assignees"|"sources";
+type LeadTextKey = "firstName"|"lastName"|"email"|"phone"|"company"|"roleTitle"|"country"|"city"|"assignedTo"|"source";
 
 const stages:[Status,string][] = [["new","Nouveau"],["to_contact","À contacter"],["contacted","Contacté"],["appointment","RDV planifié"],["proposal","Proposition envoyée"],["negotiation","Négociation"],["won","Signé"],["lost","Perdu"]];
 const emptyFilters:Filters = { query:"",statuses:[],countries:[],needs:[],assignees:[],sources:[],tagIds:[],minValue:"",maxValue:"" };
 const emptyLead = { firstName:"",lastName:"",email:"",phone:"",company:"",roleTitle:"",need:"entreprise",source:"control-center",status:"new" as Status,assignedTo:"",dealValue:"",country:"",city:"",message:"",notes:"" };
-const needs = ["entreprise","partenariat","professionnel","demonstration","rappel","presse","carriere","confidentialite","protections","legal","autre"];
+const needValues = ["entreprise","partenariat","professionnel","demonstration","rappel","presse","carriere","confidentialite","protections","legal","autre"];
 const activityLabels:Record<Activity["kind"],string> = {note:"Note",call:"Appel",email:"E-mail",whatsapp:"WhatsApp",meeting:"Rendez-vous",status:"Pipeline",proposal:"Proposition",system:"Système"};
 const priorityLabels:Record<Task["priority"],string> = {low:"Basse",normal:"Normale",high:"Haute",urgent:"Urgente"};
+const leadTextFields:Array<{label:string;key:LeadTextKey;type?:string;required?:boolean}> = [
+  {label:"Prénom",key:"firstName",required:true},{label:"Nom",key:"lastName",required:true},{label:"E-mail",key:"email",type:"email",required:true},
+  {label:"Téléphone",key:"phone"},{label:"Entreprise",key:"company"},{label:"Fonction",key:"roleTitle"},{label:"Pays",key:"country"},{label:"Ville",key:"city"},
+  {label:"Responsable",key:"assignedTo"},{label:"Source",key:"source"},
+];
 
 function money(value:number){return new Intl.NumberFormat("fr-FR",{style:"currency",currency:"EUR",maximumFractionDigits:0}).format(value)}
 function dateTime(value:string|null){if(!value)return"—";return new Intl.DateTimeFormat("fr-FR",{dateStyle:"medium",timeStyle:"short"}).format(new Date(value))}
@@ -58,6 +65,13 @@ export function CrmV2Workspace(){
   const [tasks,setTasks]=useState<Task[]>([]);
   const [activityForm,setActivityForm]=useState({kind:"note" as Activity["kind"],summary:"",body:""});
   const [taskForm,setTaskForm]=useState({title:"",dueAt:"",priority:"normal" as Task["priority"],assignedTo:"",notes:""});
+
+  const dimensionFilters:Array<{label:string;key:DimensionKey;options:string[]}> = [
+    {label:"Pays",key:"countries",options:meta.dimensions.countries},
+    {label:"Besoin",key:"needs",options:meta.dimensions.needs},
+    {label:"Responsable",key:"assignees",options:meta.dimensions.assignees},
+    {label:"Source",key:"sources",options:meta.dimensions.sources},
+  ];
 
   const params = useMemo(()=>{
     const p=new URLSearchParams();
@@ -115,9 +129,9 @@ export function CrmV2Workspace(){
 
   async function deleteLead(){if(!selected||!confirm("Supprimer définitivement ce prospect et son historique commercial ?"))return;const response=await fetch(`/api/admin/leads?id=${encodeURIComponent(selected.id)}`,{method:"DELETE"});if(response.ok){createLead();await loadLeads()}}
 
-  async function bulk(extra:Record<string,unknown>={}){
+  async function bulk(){
     if(!selectedIds.length)return;setNotice("Action groupée en cours…");
-    const body:Record<string,unknown>={ids:selectedIds,action:bulkAction,...extra};
+    const body:Record<string,unknown>={ids:selectedIds,action:bulkAction};
     if(bulkAction==="status")body.status=bulkValue;
     if(bulkAction==="assign")body.assignedTo=bulkValue;
     if(bulkAction==="add_tag"||bulkAction==="remove_tag")body.tagId=bulkValue;
@@ -141,7 +155,15 @@ export function CrmV2Workspace(){
   async function createTag(){
     if(!tagName.trim())return;const response=await fetch("/api/admin/crm/segments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({entity:"tag",name:tagName,color:tagColor})});const payload=await response.json().catch(()=>({}));if(!response.ok){setNotice(payload.error??"Création du tag impossible.");return}setTagName("");await loadMeta();
   }
-  async function toggleLeadTag(tag:Tag){if(!selected)return;const owns=selected.tags.some((item)=>item.id===tag.id);const previous=bulkAction;setBulkAction(owns?"remove_tag":"add_tag");setSelectedIds([selected.id]);await bulk({tagId:tag.id,action:owns?"remove_tag":"add_tag"});setBulkAction(previous);await loadLeads()}
+
+  async function toggleLeadTag(tag:Tag){
+    if(!selected)return;
+    const action=selected.tags.some((item)=>item.id===tag.id)?"remove_tag":"add_tag";
+    const response=await fetch("/api/admin/crm/bulk",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({ids:[selected.id],action,tagId:tag.id})});
+    const payload=await response.json().catch(()=>({}));
+    if(!response.ok){setNotice(payload.error??"Modification du tag impossible.");return}
+    await loadLeads();
+  }
 
   async function addActivity(event:FormEvent){event.preventDefault();if(!selected||!activityForm.summary.trim())return;const response=await fetch("/api/admin/crm/activities",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadId:selected.id,...activityForm})});if(response.ok){setActivityForm({kind:"note",summary:"",body:""});await loadRelations(selected.id);await loadLeads()}}
   async function addTask(event:FormEvent){event.preventDefault();if(!selected||!taskForm.title.trim())return;const response=await fetch("/api/admin/crm/tasks",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({leadId:selected.id,...taskForm,dueAt:taskForm.dueAt?new Date(taskForm.dueAt).toISOString():null})});if(response.ok){setTaskForm({title:"",dueAt:"",priority:"normal",assignedTo:selected.assigned_to??"",notes:""});await loadRelations(selected.id)}}
@@ -178,7 +200,7 @@ export function CrmV2Workspace(){
       <div className="flex flex-wrap gap-2"><div className="relative min-w-[240px] flex-1"><Search size={14} className="absolute left-3 top-3 text-[#5b2f22]/35"/><input value={filters.query} onChange={(event)=>setFilters({...filters,query:event.target.value})} placeholder="Nom, entreprise, e-mail, téléphone…" className="w-full rounded-lg border border-[#5b2f22]/10 bg-white py-2.5 pl-9 pr-3 text-xs outline-none"/></div><button onClick={()=>setFiltersOpen((value)=>!value)} className="inline-flex items-center gap-2 rounded-lg border border-[#5b2f22]/10 px-4 py-2.5 text-xs"><Filter size={14}/> Filtres {activeFilterCount?`(${activeFilterCount})`:""}</button><button onClick={exportCsv} className="inline-flex items-center gap-2 rounded-lg border border-[#5b2f22]/10 px-4 py-2.5 text-xs"><Download size={14}/> Exporter</button></div>
       {filtersOpen?<div className="mt-4 grid gap-3 lg:grid-cols-4">
         <div className="lg:col-span-4"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[.12em] text-[#5b2f22]/42">Étapes</p><div className="flex flex-wrap gap-1.5">{stages.map(([value,label])=><button key={value} onClick={()=>setFilters({...filters,statuses:toggle(filters.statuses,value)})} className={`rounded-full px-3 py-1.5 text-[10px] ${filters.statuses.includes(value)?"bg-[#7e3518] text-white":"bg-[#f7eee8] text-[#6f351f]"}`}>{label}</button>)}</div></div>
-        {[["Pays","countries",meta.dimensions.countries],["Besoin","needs",meta.dimensions.needs],["Responsable","assignees",meta.dimensions.assignees],["Source","sources",meta.dimensions.sources]] .map(([label,key,options])=><label key={String(key)} className="text-xs">{String(label)}<select value={(filters[key as keyof Filters] as string[])[0]??""} onChange={(event)=>setFilters({...filters,[key]:event.target.value?[event.target.value]:[]})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5"><option value="">Tous</option>{(options as string[]).map((option)=><option key={option} value={option}>{option}</option>)}</select></label>)}
+        {dimensionFilters.map(({label,key,options})=><label key={key} className="text-xs">{label}<select value={filters[key][0]??""} onChange={(event)=>setFilters({...filters,[key]:event.target.value?[event.target.value]:[]})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5"><option value="">Tous</option>{options.map((option)=><option key={option} value={option}>{option}</option>)}</select></label>)}
         <label className="text-xs">Valeur min.<input type="number" value={filters.minValue} onChange={(event)=>setFilters({...filters,minValue:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label className="text-xs">Valeur max.<input type="number" value={filters.maxValue} onChange={(event)=>setFilters({...filters,maxValue:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label>
         <div className="lg:col-span-2"><p className="mb-2 text-xs">Tags</p><div className="flex flex-wrap gap-1.5">{meta.tags.map((tag)=><button key={tag.id} onClick={()=>setFilters({...filters,tagIds:toggle(filters.tagIds,tag.id)})} className={`rounded-full border px-3 py-1.5 text-[10px] ${filters.tagIds.includes(tag.id)?"text-white":"bg-white"}`} style={filters.tagIds.includes(tag.id)?{backgroundColor:tag.color,borderColor:tag.color}:{borderColor:`${tag.color}55`,color:tag.color}}>{tag.name}</button>)}</div></div>
         <div className="lg:col-span-4 flex justify-end"><button onClick={()=>setFilters(emptyFilters)} className="text-xs text-[#7e3518]">Réinitialiser tous les filtres</button></div>
@@ -192,7 +214,7 @@ export function CrmV2Workspace(){
 
     <div className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
       <AdminCard title={selected?"Fiche opportunité":"Nouveau lead"} action={selected?<div className="flex gap-1"><a href={`mailto:${selected.email}`} title="E-mail" className="rounded-lg border border-[#5b2f22]/10 p-2"><Mail size={14}/></a>{selected.phone?<><a href={`tel:${selected.phone}`} title="Appeler" className="rounded-lg border border-[#5b2f22]/10 p-2"><Phone size={14}/></a><a href={whatsApp(selected.phone)} target="_blank" title="WhatsApp" className="rounded-lg border border-[#5b2f22]/10 p-2"><MessageCircle size={14}/></a></>:null}<Link href={`/admin/rendez-vous?lead=${selected.id}`} title="Créer un rendez-vous" className="rounded-lg border border-[#5b2f22]/10 p-2"><CalendarPlus size={14}/></Link></div>:null}>
-        <form onSubmit={saveLead} className="space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-2">{[["Prénom","firstName"],["Nom","lastName"],["E-mail","email"],["Téléphone","phone"],["Entreprise","company"],["Fonction","roleTitle"],["Pays","country"],["Ville","city"],["Responsable","assignedTo"],["Source","source"]].map(([label,key])=><label key={key}>{label}<input required={key==="firstName"||key==="lastName"||key==="email"} type={key==="email"?"email":"text"} value={String(form[key as keyof typeof form])} onChange={(event)=>setForm({...form,[key]:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label>)}<label>Besoin<select value={form.need} onChange={(event)=>setForm({...form,need:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5">{needs.map((need)=><option key={need} value={need}>{need}</option>)}</select></label><label>Étape<select value={form.status} onChange={(event)=>setForm({...form,status:event.target.value as Status})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5">{stages.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>Valeur de l’opportunité<input type="number" value={form.dealValue} onChange={(event)=>setForm({...form,dealValue:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label></div><label className="block">Message<textarea rows={3} value={form.message} onChange={(event)=>setForm({...form,message:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label className="block">Notes internes<textarea rows={3} value={form.notes} onChange={(event)=>setForm({...form,notes:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><div className="flex justify-between gap-2">{selected?<button type="button" onClick={()=>void deleteLead()} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs text-red-600"><Trash2 size={13}/> Supprimer</button>:<span/>}<button className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white">{selected?"Enregistrer":"Créer le prospect"}</button></div></form>
+        <form onSubmit={saveLead} className="space-y-4 text-sm"><div className="grid gap-3 sm:grid-cols-2">{leadTextFields.map(({label,key,type,required})=><label key={key}>{label}<input required={required} type={type??"text"} value={form[key]} onChange={(event)=>setForm({...form,[key]:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label>)}<label>Besoin<select value={form.need} onChange={(event)=>setForm({...form,need:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5">{needValues.map((need)=><option key={need} value={need}>{need}</option>)}</select></label><label>Étape<select value={form.status} onChange={(event)=>setForm({...form,status:event.target.value as Status})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 bg-white px-3 py-2.5">{stages.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label><label>Valeur de l’opportunité<input type="number" value={form.dealValue} onChange={(event)=>setForm({...form,dealValue:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label></div><label className="block">Message<textarea rows={3} value={form.message} onChange={(event)=>setForm({...form,message:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><label className="block">Notes internes<textarea rows={3} value={form.notes} onChange={(event)=>setForm({...form,notes:event.target.value})} className="mt-1 w-full rounded-lg border border-[#5b2f22]/10 px-3 py-2.5"/></label><div className="flex justify-between gap-2">{selected?<button type="button" onClick={()=>void deleteLead()} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs text-red-600"><Trash2 size={13}/> Supprimer</button>:<span/>}<button className="rounded-lg bg-[#7e3518] px-5 py-2.5 text-sm text-white">{selected?"Enregistrer":"Créer le prospect"}</button></div></form>
         {selected?<div className="mt-5 border-t border-[#5b2f22]/8 pt-4"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold">Tags du prospect</p><p className="text-[10px] text-[#5b2f22]/42">Cliquez pour ajouter ou retirer.</p></div><Tags size={15} className="text-[#9d4c27]"/></div><div className="mt-2 flex flex-wrap gap-1.5">{meta.tags.map((tag)=>{const active=selected.tags.some((item)=>item.id===tag.id);return <button key={tag.id} onClick={()=>void toggleLeadTag(tag)} className={`rounded-full border px-3 py-1.5 text-[10px] ${active?"text-white":"bg-white"}`} style={active?{backgroundColor:tag.color,borderColor:tag.color}:{color:tag.color,borderColor:`${tag.color}55`}}>{active?"✓ ":"+ "}{tag.name}</button>})}</div><div className="mt-3 flex gap-2"><input value={tagName} onChange={(event)=>setTagName(event.target.value)} placeholder="Nouveau tag" className="min-w-0 flex-1 rounded-lg border border-[#5b2f22]/10 px-3 py-2 text-xs"/><input type="color" value={tagColor} onChange={(event)=>setTagColor(event.target.value)} className="h-9 w-10 rounded border border-[#5b2f22]/10"/><button onClick={()=>void createTag()} className="rounded-lg border border-[#5b2f22]/10 px-3 py-2 text-xs">Créer</button></div></div>:null}
       </AdminCard>
 
