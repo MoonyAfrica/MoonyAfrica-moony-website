@@ -5,6 +5,7 @@ import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
 import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
+import { syncSuccessPlanReviews } from "@/lib/crm-success-plans";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function authorized(request: Request) {
@@ -42,9 +43,13 @@ export async function GET(request: Request) {
 
     let retention: Awaited<ReturnType<typeof runRetentionAutomations>> | null = null;
     let retentionError: string | null = null;
+    let successPlans: Awaited<ReturnType<typeof syncSuccessPlanReviews>> | null = null;
+    let successPlansError: string | null = null;
     if (!customerSuccessError) {
       try { retention = await runRetentionAutomations(supabase); }
       catch (error) { retentionError = error instanceof Error ? error.message : "Automatisations de rétention indisponibles."; }
+      try { successPlans = await syncSuccessPlanReviews(supabase); }
+      catch (error) { successPlansError = error instanceof Error ? error.message : "Préparation des revues clients indisponible."; }
     }
 
     const [scheduled, delayed] = await Promise.all([
@@ -59,8 +64,9 @@ export async function GET(request: Request) {
     const onboardingFailed = Boolean(onboardingError || (onboardingSync?.available && onboardingSync.errors.length));
     const customerSuccessFailed = Boolean(customerSuccessError || (customerSuccess?.available && customerSuccess.errors.length));
     const retentionFailed = Boolean(retentionError || (retention?.available && retention.errors.length));
+    const successPlansFailed = Boolean(successPlansError || (successPlans?.available && successPlans.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -72,6 +78,8 @@ export async function GET(request: Request) {
       customerSuccessError,
       retention,
       retentionError,
+      successPlans,
+      successPlansError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
