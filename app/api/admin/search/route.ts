@@ -24,6 +24,14 @@ export async function GET(request:Request){
     const proposals=await supabase.from("website_crm_proposals").select("id,reference,title,status,total_amount,currency,opportunity_id").or(`reference.ilike.${pattern},title.ilike.${pattern}`).limit(5);
     if(proposals.error&&proposals.error.code!=="42P01")partialErrors.push(proposals.error.message);
     for(const proposal of proposals.data??[])results.push({id:`proposal-${proposal.id}`,kind:"Proposition",title:proposal.reference,subtitle:`${proposal.title} · ${proposal.status} · ${Number(proposal.total_amount||0).toLocaleString("fr-FR")} ${proposal.currency||""}`,href:`/admin/propositions/${proposal.id}`});
+
+    const onboarding=await supabase.from("website_crm_onboarding_cases").select("id,status,owner,commercial_owner,website_leads(first_name,last_name,email,company),website_crm_opportunities(name)").or(`owner.ilike.${pattern},commercial_owner.ilike.${pattern}`).limit(5);
+    if(onboarding.error&&onboarding.error.code!=="42P01")partialErrors.push(onboarding.error.message);
+    for(const item of onboarding.data??[]){const lead=Array.isArray(item.website_leads)?item.website_leads[0]:item.website_leads;const opportunity=Array.isArray(item.website_crm_opportunities)?item.website_crm_opportunities[0]:item.website_crm_opportunities;const title=lead?.company||`${lead?.first_name||""} ${lead?.last_name||""}`.trim()||opportunity?.name||"Dossier client";const hay=`${title} ${lead?.email||""} ${opportunity?.name||""}`.toLowerCase();if(hay.includes(q.toLowerCase()))results.push({id:`onboarding-${item.id}`,kind:"Onboarding",title,subtitle:`${item.status}${item.owner?` · ${item.owner}`:""}`,href:`/admin/onboarding?case=${item.id}`})}
+
+    const contracts=await supabase.from("website_crm_contracts").select("id,onboarding_id,reference,title,status,version").or(`reference.ilike.${pattern},title.ilike.${pattern}`).limit(5);
+    if(contracts.error&&contracts.error.code!=="42P01")partialErrors.push(contracts.error.message);
+    for(const contract of contracts.data??[])results.push({id:`contract-${contract.id}`,kind:"Contrat",title:contract.reference,subtitle:`${contract.title} · V${contract.version} · ${contract.status}`,href:`/admin/onboarding?case=${contract.onboarding_id}`});
   }
 
   if(hasAdminPermission(session,"site.read")){
