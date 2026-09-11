@@ -34,6 +34,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   if(updated.error)return NextResponse.json({error:updated.error.message},{status:500});
   const delivered=await sendProposalEmail(email,recipientName,document.lead?.company??null,proposal.reference,proposal.title,proposal.total_amount,proposal.currency,publicUrl.toString(),proposal.valid_until);
   if(!delivered){if(before.data)await supabase.from("website_crm_proposals").update(before.data).eq("id",id);return NextResponse.json({error:"L’e-mail de proposition n’a pas pu être envoyé."},{status:502})}
+  await supabase.from("website_crm_proposals").update({last_reminder_at:null,reminder_count:0,viewed_followup_sent_at:null,expiry_reminder_sent_at:null,expired_at:null}).eq("id",id);
   await supabase.from("website_crm_opportunities").update({stage:"proposal",probability:Math.max(.55,Number(document.opportunity.probability||0)),updated_by:session.name||session.email||"MOONY Admin",updated_at:now}).eq("id",document.opportunity.id);
   await supabase.from("website_crm_opportunity_events").insert({opportunity_id:document.opportunity.id,lead_id:document.opportunity.lead_id,event_type:"proposal_sent",title:"Proposition envoyée au client",detail:`${proposal.reference} · ${email}`,actor:session.name||session.email||"MOONY Admin"});
   await writeAuditLog(supabase,session,"crm.proposal_sent","crm_proposal",id,`Proposition ${proposal.reference} envoyée`,{opportunityId:document.opportunity.id,recipient:email});
