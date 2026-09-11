@@ -47,6 +47,7 @@ function allowedForModule(module: string, session: Parameters<typeof hasAdminPer
 function hrefFor(module: string, row: AuditRow) {
   if (row.action.includes("automation")) return "/admin/automatisations";
   if (row.action.includes("retention")) return "/admin/customer-success/retention";
+  if (row.action.includes("success_plan") || row.action.includes("qbr") || row.entity_type === "crm_success_plan" || row.entity_type === "crm_success_objective" || row.entity_type === "crm_qbr" || row.entity_type === "crm_qbr_action") return "/admin/customer-success/plans";
   if (row.action.includes("customer_success") || row.action.includes("customer_review") || row.action.includes("nps_") || row.entity_type === "crm_client_growth") return row.entity_id ? `/admin/customer-success?client=${row.entity_id}` : "/admin/customer-success";
   if (module === "crm") return row.entity_id ? `/admin/crm?lead=${row.entity_id}` : "/admin/crm";
   if (module === "support") return row.entity_id ? `/admin/service-client?ticket=${row.entity_id}` : "/admin/service-client";
