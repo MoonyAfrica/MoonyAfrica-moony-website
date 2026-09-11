@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
+import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -39,6 +40,13 @@ export async function GET(request: Request) {
     try { customerSuccess = await syncCustomerSuccessHealth(supabase); }
     catch (error) { customerSuccessError = error instanceof Error ? error.message : "Surveillance Customer Success indisponible."; }
 
+    let retention: Awaited<ReturnType<typeof runRetentionAutomations>> | null = null;
+    let retentionError: string | null = null;
+    if (!customerSuccessError) {
+      try { retention = await runRetentionAutomations(supabase); }
+      catch (error) { retentionError = error instanceof Error ? error.message : "Automatisations de rétention indisponibles."; }
+    }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -50,8 +58,9 @@ export async function GET(request: Request) {
     const followupFailed = Boolean(proposalFollowupError || (proposalFollowups?.available && proposalFollowups.errors.length));
     const onboardingFailed = Boolean(onboardingError || (onboardingSync?.available && onboardingSync.errors.length));
     const customerSuccessFailed = Boolean(customerSuccessError || (customerSuccess?.available && customerSuccess.errors.length));
+    const retentionFailed = Boolean(retentionError || (retention?.available && retention.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -61,6 +70,8 @@ export async function GET(request: Request) {
       onboardingError,
       customerSuccess,
       customerSuccessError,
+      retention,
+      retentionError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
