@@ -22,14 +22,74 @@ async function logActivity(supabase: ReturnType<typeof requireAdmin>["supabase"]
   });
 }
 
+function listParam(url: URL, key: string) {
+  return (url.searchParams.get(key) || "").split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+function normalized(value: unknown) {
+  return String(value ?? "").trim().toLocaleLowerCase("fr");
+}
+
 export async function GET(request: Request) {
-  const { error, supabase } = requireAdmin(request, "crm.read"); if (error || !supabase) return error;
-  const query = new URL(request.url).searchParams.get("q")?.trim().toLowerCase() || "";
-  let builder = supabase.from("website_leads").select("*").order("updated_at", { ascending: false }).limit(250);
-  if (query) builder = builder.or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,email.ilike.%${query}%,company.ilike.%${query}%`);
-  const { data, error: queryError } = await builder;
-  if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
-  return NextResponse.json({ leads: data ?? [] });
+  const { error, supabase } = requireAdmin(request, "crm.read");
+  if (error || !supabase) return error;
+  const url = new URL(request.url);
+  const query = (url.searchParams.get("q") || "").trim().toLocaleLowerCase("fr");
+  const statusFilter = listParam(url, "statuses");
+  const countryFilter = listParam(url, "countries").map((item) => item.toLocaleLowerCase("fr"));
+  const needFilter = listParam(url, "needs");
+  const assigneeFilter = listParam(url, "assignees").map((item) => item.toLocaleLowerCase("fr"));
+  const sourceFilter = listParam(url, "sources").map((item) => item.toLocaleLowerCase("fr"));
+  const tagFilter = listParam(url, "tagIds");
+  const minValueRaw = url.searchParams.get("minValue");
+  const maxValueRaw = url.searchParams.get("maxValue");
+  const minValue = minValueRaw !== null && minValueRaw !== "" && Number.isFinite(Number(minValueRaw)) ? Number(minValueRaw) : null;
+  const maxValue = maxValueRaw !== null && maxValueRaw !== "" && Number.isFinite(Number(maxValueRaw)) ? Number(maxValueRaw) : null;
+
+  const leadsResult = await supabase.from("website_leads").select("*").order("updated_at", { ascending: false }).limit(500);
+  if (leadsResult.error) return NextResponse.json({ error: leadsResult.error.message }, { status: 500 });
+  const rows = (leadsResult.data ?? []) as Array<Record<string, unknown>>;
+
+  const ids = rows.map((row) => String(row.id));
+  const tagsByLead = new Map<string, Array<{id:string;name:string;slug:string;color:string}>>();
+  let tagsAvailable = true;
+  if (ids.length) {
+    const tagResult = await supabase.from("website_crm_lead_tags").select("lead_id,tag_id,website_crm_tags(id,name,slug,color)").in("lead_id", ids);
+    if (tagResult.error) tagsAvailable = false;
+    else {
+      for (const relation of tagResult.data ?? []) {
+        const rawTag = Array.isArray(relation.website_crm_tags) ? relation.website_crm_tags[0] : relation.website_crm_tags;
+        if (!rawTag) continue;
+        const tag = rawTag as {id:string;name:string;slug:string;color:string};
+        const key = String(relation.lead_id);
+        tagsByLead.set(key, [...(tagsByLead.get(key) ?? []), tag]);
+      }
+    }
+  }
+
+  const enriched = rows.map((row) => ({ ...row, tags: tagsByLead.get(String(row.id)) ?? [] }));
+  const filtered = enriched.filter((lead) => {
+    if (query) {
+      const haystack = [lead.first_name, lead.last_name, lead.email, lead.company, lead.phone, lead.country, lead.city, lead.assigned_to, lead.source]
+        .map(normalized).join(" ");
+      if (!haystack.includes(query)) return false;
+    }
+    if (statusFilter.length && !statusFilter.includes(String(lead.status))) return false;
+    if (countryFilter.length && !countryFilter.includes(normalized(lead.country))) return false;
+    if (needFilter.length && !needFilter.includes(String(lead.need))) return false;
+    if (assigneeFilter.length && !assigneeFilter.includes(normalized(lead.assigned_to))) return false;
+    if (sourceFilter.length && !sourceFilter.includes(normalized(lead.source))) return false;
+    const dealValue = Number(lead.deal_value || 0);
+    if (minValue !== null && dealValue < minValue) return false;
+    if (maxValue !== null && dealValue > maxValue) return false;
+    if (tagFilter.length) {
+      const owned = (lead.tags as Array<{id:string}>).map((tag) => tag.id);
+      if (!tagFilter.every((tagId) => owned.includes(tagId))) return false;
+    }
+    return true;
+  });
+
+  return NextResponse.json({ leads: filtered, total: filtered.length, tagsAvailable });
 }
 
 export async function POST(request: Request) {
@@ -65,7 +125,7 @@ export async function POST(request: Request) {
       deal_value: data.deal_value,
     });
   } catch {}
-  return NextResponse.json({ lead:data }, { status:201 });
+  return NextResponse.json({ lead:{...data,tags:[]} }, { status:201 });
 }
 
 export async function PATCH(request: Request) {
@@ -104,7 +164,7 @@ export async function PATCH(request: Request) {
     await logActivity(supabase, id, "Valeur de l’opportunité modifiée", `${Number(before?.deal_value || 0)} → ${Number(data.deal_value || 0)}`, session);
   }
   await writeAuditLog(supabase, session, "crm.lead_updated", "lead", id, `Prospect ${before ? `${before.first_name} ${before.last_name}` : id} modifié`, { previousStatus: before?.status ?? null, status: data.status, assignedTo: data.assigned_to ?? null, dealValue: data.deal_value ?? null });
-  return NextResponse.json({lead:data});
+  return NextResponse.json({lead:{...data,tags:[]}});
 }
 
 export async function DELETE(request: Request) {
