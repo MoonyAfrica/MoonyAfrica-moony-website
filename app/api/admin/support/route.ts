@@ -16,8 +16,12 @@ async function runUrgentAutomation(supabase: NonNullable<ReturnType<typeof requi
       ticket_id: String(ticket.id),
       subject: ticket.subject,
       requester: ticket.requester_name || ticket.requester_email,
+      requester_email: ticket.requester_email,
+      email: ticket.requester_email,
       priority: ticket.priority,
       status: ticket.status,
+      type: ticket.type,
+      assigned_to: ticket.assigned_to,
     });
   } catch {
     // The ticket action must remain successful if a non-critical automation fails.
