@@ -8,7 +8,7 @@ import { AdminCard, AdminWorkspace } from "@/components/admin-workspace";
 type Lead={id:string;first_name:string;last_name:string;email:string;company:string|null;country:string|null;need:string|null;source:string|null};
 type Onboarding={id:string;status:string;readiness_status:string;actual_go_live_at:string|null;target_go_live_date:string|null;kickoff_at:string|null};
 type Opportunity={id:string;name:string;amount:number;currency:string;owner:string|null};
-type Client={id:string;lead_id:string;onboarding_id:string;opportunity_id:string;account_name:string;status:string;owner:string|null;commercial_owner:string|null;activated_at:string;next_success_review_at:string|null;renewal_date:string|null;notes:string|null;website_leads:Lead|null;website_crm_onboarding_cases:Onboarding|null;website_crm_opportunities:Opportunity|null};
+type Client={id:string;lead_id:string;onboarding_id:string;opportunity_id:string;account_name:string;status:string;owner:string|null;commercial_owner:string|null;activated_at:string;next_success_review_at:string|null;renewal_date:string|null;notes:string|null;updated_at:string;website_leads:Lead|null;website_crm_onboarding_cases:Onboarding|null;website_crm_opportunities:Opportunity|null};
 type Payload={available:boolean;clients:Client[];metrics:{active:number;paused:number;offboarded:number;reviewsDue:number}};
 const empty:Payload={available:true,clients:[],metrics:{active:0,paused:0,offboarded:0,reviewsDue:0}};
 const statusLabels:Record<string,string>={active:"Actif",paused:"En pause",offboarded:"Sorti"};
