@@ -22,10 +22,10 @@ async function sendNps(email:string,name:string,accountName:string,url:string){
 export async function GET(request:Request){
  const {error,supabase}=requireAdmin(request,"crm.read");if(error||!supabase)return error;
  try{
-  const data=await loadCustomerSuccessData(supabase);if(!data.available)return NextResponse.json({available:false,accounts:[],events:{},surveys:{},growth:{},metrics:{active:0,healthy:0,watch:0,atRisk:0,critical:0,reviewsDue:0,renewalsSoon:0,npsAverage:null}});
+  const data=await loadCustomerSuccessData(supabase);if(!data.available)return NextResponse.json({available:false,accounts:[],events:{},surveys:{},growth:{},metrics:{active:0,healthy:0,watch:0,atRisk:0,critical:0,reviewsDue:0,renewalsSoon:0,npsIndex:null,npsResponses:0}});
   const now=Date.now(),within45=now+45*86400000;
-  const active=data.accounts.filter((row:any)=>row.status==="active");const nps=active.map((row:any)=>row.latestSurvey?.score??row.last_nps_score).filter((value:any)=>value!=null).map(Number);
-  const metrics={active:active.length,healthy:active.filter((row:any)=>row.health.status==="healthy").length,watch:active.filter((row:any)=>row.health.status==="watch").length,atRisk:active.filter((row:any)=>row.health.status==="at_risk").length,critical:active.filter((row:any)=>row.health.status==="critical").length,reviewsDue:active.filter((row:any)=>row.next_success_review_at&&new Date(row.next_success_review_at).getTime()<=now).length,renewalsSoon:active.filter((row:any)=>row.renewal_date&&new Date(`${row.renewal_date}T23:59:59`).getTime()>=now&&new Date(`${row.renewal_date}T23:59:59`).getTime()<=within45).length,npsAverage:nps.length?Math.round(nps.reduce((sum:number,value:number)=>sum+value,0)/nps.length*10)/10:null};
+  const active=data.accounts.filter((row:any)=>row.status==="active");const npsScores=active.map((row:any)=>row.latestSurvey?.score??row.last_nps_score).filter((value:any)=>value!=null).map(Number);const promoters=npsScores.filter((value:number)=>value>=9).length,detractors=npsScores.filter((value:number)=>value<=6).length;const npsIndex=npsScores.length?Math.round((promoters-detractors)/npsScores.length*100):null;
+  const metrics={active:active.length,healthy:active.filter((row:any)=>row.health.status==="healthy").length,watch:active.filter((row:any)=>row.health.status==="watch").length,atRisk:active.filter((row:any)=>row.health.status==="at_risk").length,critical:active.filter((row:any)=>row.health.status==="critical").length,reviewsDue:active.filter((row:any)=>row.next_success_review_at&&new Date(row.next_success_review_at).getTime()<=now).length,renewalsSoon:active.filter((row:any)=>row.renewal_date&&new Date(`${row.renewal_date}T23:59:59`).getTime()>=now&&new Date(`${row.renewal_date}T23:59:59`).getTime()<=within45).length,npsIndex,npsResponses:npsScores.length};
   return NextResponse.json({...data,metrics,capabilities:{email:Boolean(process.env.BREVO_API_KEY&&process.env.BREVO_SENDER_EMAIL),cron:Boolean(process.env.AUTOMATION_CRON_SECRET||process.env.CRON_SECRET)}});
  }catch(error){return NextResponse.json({error:error instanceof Error?error.message:"Impossible de charger Customer Success."},{status:500})}
 }
@@ -49,7 +49,7 @@ export async function POST(request:Request){
 
  if(action==="profile"){
   const patch:Record<string,unknown>={updated_by:who,updated_at:now};
-  if("adoptionScore" in body){const value=Number(body.adoptionScore);if(!Number.isFinite(value)||value<0||value>100)return NextResponse.json({error:"Adoption attendue entre 0 et 100."},{status:422});patch.adoption_score=Math.round(value)}
+  if("adoptionScore" in body){if(body.adoptionScore==null||body.adoptionScore==="")patch.adoption_score=null;else{const value=Number(body.adoptionScore);if(!Number.isFinite(value)||value<0||value>100)return NextResponse.json({error:"Adoption attendue entre 0 et 100."},{status:422});patch.adoption_score=Math.round(value)}}
   if("churnRiskNotes" in body)patch.churn_risk_notes=nullable(body.churnRiskNotes,5000);
   if("renewalProbability" in body){const value=Number(body.renewalProbability);if(!Number.isFinite(value)||value<0||value>100)return NextResponse.json({error:"Probabilité de renouvellement attendue entre 0 et 100."},{status:422});patch.renewal_probability=Math.round(value)}
   if("expansionPotential" in body){const value=asText(body.expansionPotential,20);if(!["low","medium","high"].includes(value))return NextResponse.json({error:"Potentiel d’expansion invalide."},{status:422});patch.expansion_potential=value}
@@ -77,9 +77,9 @@ export async function POST(request:Request){
 
  if(action==="growth_update"){
   const growthId=asText(body.growthId,80),status=asText(body.status,30);if(!growthId||!["open","planned","won","lost","dismissed"].includes(status))return NextResponse.json({error:"Opportunité ou statut invalide."},{status:422});
-  const existing=await supabase.from("website_crm_client_growth_opportunities").select("id,title,status").eq("id",growthId).eq("client_id",clientId).maybeSingle();if(existing.error||!existing.data)return NextResponse.json({error:"Opportunité de croissance introuvable."},{status:404});
+  const existing=await supabase.from("website_crm_client_growth_opportunities").select("id,title,status,kind").eq("id",growthId).eq("client_id",clientId).maybeSingle();if(existing.error||!existing.data)return NextResponse.json({error:"Opportunité de croissance introuvable."},{status:404});
   const updated=await supabase.from("website_crm_client_growth_opportunities").update({status,updated_by:who,updated_at:now}).eq("id",growthId).select("*").single();if(updated.error)return NextResponse.json({error:updated.error.message},{status:500});
-  await event(supabase,clientId,status==="won"?"expansion":"renewal",`Opportunité ${status}`,existing.data.title,who);return NextResponse.json({ok:true,growth:updated.data});
+  await event(supabase,clientId,existing.data.kind==="renewal"?"renewal":"expansion",`Opportunité ${status}`,existing.data.title,who);return NextResponse.json({ok:true,growth:updated.data});
  }
  return NextResponse.json({error:"Action non prise en charge."},{status:422});
 }
