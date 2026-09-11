@@ -23,7 +23,7 @@ export async function GET(request:Request){
 
     const proposals=await supabase.from("website_crm_proposals").select("id,reference,title,status,total_amount,currency,opportunity_id").or(`reference.ilike.${pattern},title.ilike.${pattern}`).limit(5);
     if(proposals.error&&proposals.error.code!=="42P01")partialErrors.push(proposals.error.message);
-    for(const proposal of proposals.data??[])results.push({id:`proposal-${proposal.id}`,kind:"Proposition",title:proposal.reference,subtitle:`${proposal.title} · ${proposal.status} · ${Number(proposal.total_amount||0).toLocaleString("fr-FR")} ${proposal.currency||""}`,href:`/admin/opportunites?opportunity=${proposal.opportunity_id}`});
+    for(const proposal of proposals.data??[])results.push({id:`proposal-${proposal.id}`,kind:"Proposition",title:proposal.reference,subtitle:`${proposal.title} · ${proposal.status} · ${Number(proposal.total_amount||0).toLocaleString("fr-FR")} ${proposal.currency||""}`,href:`/admin/propositions/${proposal.id}`});
   }
 
   if(hasAdminPermission(session,"site.read")){
