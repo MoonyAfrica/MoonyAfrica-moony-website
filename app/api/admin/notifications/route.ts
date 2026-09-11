@@ -111,7 +111,7 @@ export async function GET(request: Request) {
 
   const generated = await supabase.from("control_center_generated_notifications").select("id,target_role,target_user_key,title,subtitle,href,severity,source_type,source_id,created_at,expires_at").order("created_at", { ascending: false }).limit(100);
   if (!generated.error) {
-    const crmSources = ["crm_proposal","crm_onboarding","crm_customer_success","crm_retention","crm_success_plan","crm_account_governance","crm_executive_portfolio","crm_escalation","crm_revenue_forecast"];
+    const crmSources = ["crm_proposal","crm_onboarding","crm_customer_success","crm_retention","crm_success_plan","crm_account_governance","crm_executive_portfolio","crm_escalation","crm_revenue_forecast","crm_billing"];
     for (const item of generated.data ?? []) {
       if (item.expires_at && new Date(item.expires_at).getTime() <= now.getTime()) continue;
       const targeted = (!item.target_role && !item.target_user_key) || item.target_role === session.role || item.target_user_key === session.sub;

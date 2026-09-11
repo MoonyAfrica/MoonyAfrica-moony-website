@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runDueAutomationJobs, runScheduledAutomations } from "@/lib/automation-engine";
 import { syncAccountGovernance } from "@/lib/crm-account-governance";
+import { syncBillingOperations } from "@/lib/crm-billing-ops";
 import { syncCustomerSuccessEscalations } from "@/lib/crm-escalations";
 import { syncExecutivePortfolioAlerts } from "@/lib/crm-executive-portfolio";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
@@ -74,6 +75,11 @@ export async function GET(request: Request) {
       catch (error) { revenueForecastError = error instanceof Error ? error.message : "Renewal Desk indisponible."; }
     }
 
+    let billing: Awaited<ReturnType<typeof syncBillingOperations>> | null = null;
+    let billingError: string | null = null;
+    try { billing = await syncBillingOperations(supabase); }
+    catch (error) { billingError = error instanceof Error ? error.message : "Billing & Revenue Operations indisponible."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -91,8 +97,9 @@ export async function GET(request: Request) {
     const executivePortfolioFailed = Boolean(executivePortfolioError || (executivePortfolio?.available && executivePortfolio.errors.length));
     const escalationsFailed = Boolean(escalationsError || (escalations?.available && escalations.errors.length));
     const revenueForecastFailed = Boolean(revenueForecastError || (revenueForecast?.available && revenueForecast.errors.length));
+    const billingFailed = Boolean(billingError || (billing?.available && billing.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -114,6 +121,8 @@ export async function GET(request: Request) {
       escalationsError,
       revenueForecast,
       revenueForecastError,
+      billing,
+      billingError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
