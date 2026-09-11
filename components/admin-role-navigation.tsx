@@ -28,6 +28,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Opportunités","/admin/opportunites",Briefcase,"crm.read"],
   ["Propositions","/admin/propositions",FileText,"crm.read"],
   ["Onboarding","/admin/onboarding",ClipboardCheck,"crm.read"],
+  ["Portails clients","/admin/onboarding/portails",ShieldCheck,"crm.read"],
   ["Scoring","/admin/scoring",Flame,"crm.read"],
   ["Playbooks","/admin/playbooks",BookOpenCheck,"crm.read"],
   ["Prévisions","/admin/previsions",TrendingUp,"crm.read"],
