@@ -9,7 +9,7 @@ export type ProposalPortalDocument = {
     view_count:number; sent_to_email:string|null; responded_at:string|null; response_name:string|null;
     response_email:string|null; response_message:string|null;
   };
-  opportunity:{id:string;lead_id:string;name:string;stage:string;amount:number;currency:string;expected_close_date:string|null;owner:string|null};
+  opportunity:{id:string;lead_id:string;name:string;stage:string;probability:number;amount:number;currency:string;expected_close_date:string|null;owner:string|null};
   lead:{id:string;first_name:string;last_name:string;email:string;company:string|null;country:string|null;need:string|null}|null;
   primaryContact:{name:string;email:string|null;role_title:string|null}|null;
   items:Array<{id:string;name:string;description:string|null;quantity:number;unit_price:number;discount_percent:number;total_amount:number;billing_model:string}>;
@@ -41,7 +41,7 @@ function one<T>(value:T|T[]|null|undefined):T|null{return Array.isArray(value)?v
 function numberOf(value:unknown){const n=Number(value);return Number.isFinite(n)?n:0}
 
 export async function loadProposalPortalDocument(supabase:any, proposalId:string):Promise<ProposalPortalDocument|null>{
-  const proposalResult=await supabase.from("website_crm_proposals").select("*,website_crm_opportunities(id,lead_id,name,stage,amount,currency,expected_close_date,owner,website_leads(id,first_name,last_name,email,company,country,need))").eq("id",proposalId).maybeSingle();
+  const proposalResult=await supabase.from("website_crm_proposals").select("*,website_crm_opportunities(id,lead_id,name,stage,probability,amount,currency,expected_close_date,owner,website_leads(id,first_name,last_name,email,company,country,need))").eq("id",proposalId).maybeSingle();
   if(proposalResult.error||!proposalResult.data)return null;
   const proposal=proposalResult.data;
   const opportunity=one<any>(proposal.website_crm_opportunities);
@@ -60,7 +60,7 @@ export async function loadProposalPortalDocument(supabase:any, proposalId:string
       first_viewed_at:proposal.first_viewed_at??null,last_viewed_at:proposal.last_viewed_at??null,view_count:Number(proposal.view_count||0),sent_to_email:proposal.sent_to_email??null,
       responded_at:proposal.responded_at??null,response_name:proposal.response_name??null,response_email:proposal.response_email??null,response_message:proposal.response_message??null,
     },
-    opportunity:{id:String(opportunity.id),lead_id:String(opportunity.lead_id),name:String(opportunity.name||"Opportunité"),stage:String(opportunity.stage||"proposal"),amount:numberOf(opportunity.amount),currency:String(opportunity.currency||proposal.currency||"XOF"),expected_close_date:opportunity.expected_close_date??null,owner:opportunity.owner??null},
+    opportunity:{id:String(opportunity.id),lead_id:String(opportunity.lead_id),name:String(opportunity.name||"Opportunité"),stage:String(opportunity.stage||"proposal"),probability:numberOf(opportunity.probability),amount:numberOf(opportunity.amount),currency:String(opportunity.currency||proposal.currency||"XOF"),expected_close_date:opportunity.expected_close_date??null,owner:opportunity.owner??null},
     lead:lead?{id:String(lead.id),first_name:String(lead.first_name||""),last_name:String(lead.last_name||""),email:String(lead.email||""),company:lead.company??null,country:lead.country??null,need:lead.need??null}:null,
     primaryContact:contact?{name:String(contact.name||""),email:contact.email??null,role_title:contact.role_title??null}:null,
     items:(itemsResult.error?[]:(itemsResult.data??[])).map((item:any)=>({id:String(item.id),name:String(item.name||""),description:item.description??null,quantity:numberOf(item.quantity),unit_price:numberOf(item.unit_price),discount_percent:numberOf(item.discount_percent),total_amount:numberOf(item.total_amount),billing_model:String(item.billing_model||"custom")})),
