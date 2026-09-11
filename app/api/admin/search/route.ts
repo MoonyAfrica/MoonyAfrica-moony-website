@@ -36,6 +36,10 @@ export async function GET(request:Request){
     const clients=await supabase.from("website_crm_client_accounts").select("id,account_name,status,owner,commercial_owner,website_leads(email,country)").or(`account_name.ilike.${pattern},owner.ilike.${pattern},commercial_owner.ilike.${pattern}`).limit(5);
     if(clients.error&&clients.error.code!=="42P01")partialErrors.push(clients.error.message);
     for(const client of clients.data??[]){const lead=Array.isArray(client.website_leads)?client.website_leads[0]:client.website_leads;results.push({id:`client-${client.id}`,kind:"Client actif",title:client.account_name,subtitle:`${client.status}${lead?.country?` · ${lead.country}`:""}${client.owner?` · ${client.owner}`:""}`,href:`/admin/clients?client=${client.id}`})}
+
+    const stakeholders=await supabase.from("website_crm_account_stakeholders").select("id,client_id,name,email,role_title,stakeholder_role,website_crm_client_accounts(account_name)").eq("is_active",true).or(`name.ilike.${pattern},email.ilike.${pattern},role_title.ilike.${pattern}`).limit(8);
+    if(stakeholders.error&&!['42P01','42703'].includes(stakeholders.error.code||""))partialErrors.push(stakeholders.error.message);
+    for(const contact of stakeholders.data??[]){const account=Array.isArray(contact.website_crm_client_accounts)?contact.website_crm_client_accounts[0]:contact.website_crm_client_accounts;results.push({id:`stakeholder-${contact.id}`,kind:"Interlocuteur compte",title:contact.name,subtitle:`${account?.account_name||"Compte client"}${contact.role_title?` · ${contact.role_title}`:""}${contact.email?` · ${contact.email}`:""}`,href:`/admin/customer-success/governance?client=${contact.client_id}`})}
   }
 
   if(hasAdminPermission(session,"site.read")){
