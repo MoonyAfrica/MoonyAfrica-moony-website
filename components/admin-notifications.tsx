@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, Bell, CalendarClock, Check, CheckCircle2, ClipboardCheck, FileCheck2, FileText, Headphones, ListTodo, Mail, UserPlus, X } from "lucide-react";
+import { AlertCircle, Bell, CalendarClock, Check, CheckCircle2, ClipboardCheck, FileCheck2, FileText, Headphones, HeartPulse, ListTodo, Mail, UserPlus, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-type Item={id:string;kind:"task"|"lead"|"ticket"|"appointment"|"campaign"|"content"|"proposal"|"onboarding";title:string;subtitle:string;href:string;severity:"info"|"warning"|"urgent";dueAt?:string|null;createdAt?:string|null;read?:boolean};
+type Item={id:string;kind:"task"|"lead"|"ticket"|"appointment"|"campaign"|"content"|"proposal"|"onboarding"|"client";title:string;subtitle:string;href:string;severity:"info"|"warning"|"urgent";dueAt?:string|null;createdAt?:string|null;read?:boolean};
 
-const icons={task:ListTodo,lead:UserPlus,ticket:Headphones,appointment:CalendarClock,campaign:Mail,content:FileText,proposal:FileCheck2,onboarding:ClipboardCheck};
+const icons={task:ListTodo,lead:UserPlus,ticket:Headphones,appointment:CalendarClock,campaign:Mail,content:FileText,proposal:FileCheck2,onboarding:ClipboardCheck,client:HeartPulse};
 function when(value?:string|null){if(!value)return"";const date=new Date(value);if(Number.isNaN(date.getTime()))return"";return new Intl.DateTimeFormat("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}).format(date)}
 
 export function AdminNotifications(){
