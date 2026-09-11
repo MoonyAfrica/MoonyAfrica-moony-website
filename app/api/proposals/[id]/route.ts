@@ -16,8 +16,9 @@ async function authorizedProposal(supabase:any,id:string,token:string){
 async function markExpired(supabase:any,proposal:any){
   if(!proposalIsExpired(proposal.valid_until)||["accepted","rejected","expired","superseded"].includes(String(proposal.status)))return proposal;
   const now=new Date().toISOString();
-  const updated=await supabase.from("website_crm_proposals").update({status:"expired",expired_at:now,updated_at:now}).eq("id",proposal.id).select("*").single();
+  const updated=await supabase.from("website_crm_proposals").update({status:"expired",updated_at:now}).eq("id",proposal.id).select("*").single();
   if(!updated.error){
+    await supabase.from("website_crm_proposals").update({expired_at:now}).eq("id",proposal.id);
     const opportunity=await supabase.from("website_crm_opportunities").select("lead_id").eq("id",proposal.opportunity_id).maybeSingle();
     await supabase.from("website_crm_opportunity_events").insert({opportunity_id:proposal.opportunity_id,lead_id:opportunity.data?.lead_id??null,event_type:"proposal_expired",title:"Proposition expirée",detail:`${proposal.reference} a atteint sa date de validité.`,actor:"MOONY System"});
     await notifyCrmProposalEvent(supabase,{proposalId:String(proposal.id),opportunityId:String(proposal.opportunity_id),title:"Proposition expirée",subtitle:`${proposal.reference} a dépassé sa date de validité.`,severity:"warning"});
