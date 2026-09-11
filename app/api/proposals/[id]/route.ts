@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { ensureCrmOnboarding } from "@/lib/crm-onboarding";
 import { notifyCrmProposalEvent } from "@/lib/crm-proposal-followups";
 import { effectiveProposalStatus, loadProposalPortalDocument, proposalIsExpired, syncLeadFromOpportunities, verifyProposalToken } from "@/lib/crm-proposal-portal";
 
@@ -67,6 +68,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const patch:Record<string,unknown>={status:nextStatus,responded_at:now,response_name:name,response_email:email||null,response_message:message,response_source:"client_portal",updated_at:now};if(accepted)patch.accepted_at=now;else patch.rejected_at=now;
   const updated=await supabase.from("website_crm_proposals").update(patch).eq("id",id).select("*").single();if(updated.error)return json({error:"Impossible d’enregistrer votre décision."},500);
   const opportunity=await supabase.from("website_crm_opportunities").select("id,lead_id,name,amount").eq("id",proposal.opportunity_id).maybeSingle();
+  let onboarding:null|{created?:boolean;case?:unknown;available?:boolean}=null;
   if(opportunity.data){
     if(accepted){
       await supabase.from("website_crm_opportunities").update({stage:"won",probability:1,amount:Number(updated.data.total_amount||opportunity.data.amount||0),updated_by:"Client portal",updated_at:now}).eq("id",opportunity.data.id);
@@ -75,7 +77,8 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
     await supabase.from("website_crm_opportunity_events").insert({opportunity_id:opportunity.data.id,lead_id:opportunity.data.lead_id,event_type:accepted?"proposal_accepted":"proposal_rejected",title:accepted?"Proposition acceptée par le client":"Proposition refusée par le client",detail:`${proposal.reference} · décision confirmée par ${name}${message?` · ${message}`:""}`,actor:name});
     await syncLeadFromOpportunities(supabase,opportunity.data.lead_id);
     await notifyCrmProposalEvent(supabase,{proposalId:id,opportunityId:String(opportunity.data.id),title:accepted?"Proposition acceptée":"Proposition refusée",subtitle:`${proposal.reference} · ${name}${message?` · ${message}`:""}`,severity:accepted?"info":"warning"});
+    if(accepted){try{onboarding=await ensureCrmOnboarding(supabase,{opportunityId:String(opportunity.data.id),proposalId:id,actor:name})}catch{/* CRM V7 may not be migrated yet; acceptance must remain successful. */}}
   }
   const document=await loadProposalPortalDocument(supabase,id);if(document)document.proposal.status=nextStatus;
-  return json({ok:true,status:nextStatus,document});
+  return json({ok:true,status:nextStatus,document,onboarding});
 }
