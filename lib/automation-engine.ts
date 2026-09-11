@@ -1,7 +1,8 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { leadMatchesSegmentFilters } from "@/lib/crm-segment-matching";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
-type TriggerType = "new_lead" | "urgent_ticket" | "appointment_reminder" | "stale_lead";
+type TriggerType = "new_lead" | "urgent_ticket" | "appointment_reminder" | "stale_lead" | "lead_tag_added" | "segment_match";
 type AutomationRule = {
   id: string;
   name: string;
@@ -15,6 +16,9 @@ type AutomationPayload = Record<string, unknown> & {
   lead_id?: string;
   ticket_id?: string;
   appointment_id?: string;
+  tag_id?: string;
+  tag_ids?: string[];
+  segment_ids?: string[];
   __chain_depth?: number;
 };
 
@@ -59,6 +63,10 @@ function list(value: unknown) {
   return Array.isArray(value) ? value.map((item) => String(item).trim().toLowerCase()).filter(Boolean) : [];
 }
 
+function rawList(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => String(item).trim()).filter(Boolean) : [];
+}
+
 function matchesList(condition: unknown, value: unknown) {
   const expected = list(condition);
   if (!expected.length) return true;
@@ -82,6 +90,24 @@ function conditionsMatch(rule: AutomationRule, payload: AutomationPayload) {
 
   const companyContains = stringValue(conditions.company_contains).trim().toLowerCase();
   if (companyContains && !stringValue(payload.company).toLowerCase().includes(companyContains)) return false;
+
+  const requiredTags = rawList(conditions.tag_ids);
+  if (rule.trigger_type === "lead_tag_added" && !requiredTags.length) return false;
+  if (requiredTags.length) {
+    const ownedTags = rawList(payload.tag_ids);
+    const eventTag = stringValue(payload.tag_id);
+    const matched = rule.trigger_type === "lead_tag_added"
+      ? requiredTags.includes(eventTag)
+      : requiredTags.every((tagId) => ownedTags.includes(tagId));
+    if (!matched) return false;
+  }
+
+  const requiredSegments = rawList(conditions.segment_ids);
+  if (rule.trigger_type === "segment_match" && !requiredSegments.length) return false;
+  if (requiredSegments.length) {
+    const matchedSegments = rawList(payload.segment_ids);
+    if (!requiredSegments.some((segmentId) => matchedSegments.includes(segmentId))) return false;
+  }
 
   return true;
 }
@@ -295,11 +321,70 @@ async function enabledRules(supabase: SupabaseAdmin, triggerTypes?: TriggerType[
   return (result.data ?? []) as AutomationRule[];
 }
 
-export async function triggerAutomationEvent(supabase: SupabaseAdmin, triggerType: Extract<TriggerType, "new_lead" | "urgent_ticket">, sourceType: string, sourceId: string, payload: AutomationPayload) {
+export async function triggerAutomationEvent(supabase: SupabaseAdmin, triggerType: Extract<TriggerType, "new_lead" | "urgent_ticket" | "lead_tag_added">, sourceType: string, sourceId: string, payload: AutomationPayload) {
   let rules: AutomationRule[] = [];
   try { rules = await enabledRules(supabase, [triggerType]); } catch { return [] as RunResult[]; }
-  const eventKey = triggerType === "urgent_ticket" ? `urgent:${sourceId}` : `created:${sourceId}`;
+  const eventKey = triggerType === "urgent_ticket"
+    ? `urgent:${sourceId}`
+    : triggerType === "lead_tag_added"
+      ? `tag-added:${sourceId}:${stringValue(payload.tag_id)}`
+      : `created:${sourceId}`;
   return Promise.all(rules.map((rule) => executeRule(supabase, rule, eventKey, sourceType, sourceId, payload)));
+}
+
+export async function triggerLeadTagAddedAutomationEvents(supabase: SupabaseAdmin, leadIds: string[], tagId: string) {
+  const uniqueIds = [...new Set(leadIds.map((id) => id.trim()).filter(Boolean))].slice(0, 200);
+  if (!uniqueIds.length || !tagId) return [] as RunResult[];
+
+  let rules: AutomationRule[] = [];
+  try { rules = await enabledRules(supabase, ["lead_tag_added"]); } catch { return [] as RunResult[]; }
+  if (!rules.length) return [] as RunResult[];
+
+  const query = await supabase.from("website_leads").select("id,first_name,last_name,company,email,status,assigned_to,country,need,source,deal_value").in("id", uniqueIds);
+  if (query.error) return [] as RunResult[];
+
+  const results: RunResult[] = [];
+  for (const lead of query.data ?? []) {
+    const payload: AutomationPayload = {
+      ...lead,
+      lead_id: lead.id,
+      lead: leadLabel(lead as Record<string, unknown>),
+      tag_id: tagId,
+      tag_ids: [tagId],
+    };
+    for (const rule of rules) results.push(await executeRule(supabase, rule, `tag-added:${lead.id}:${tagId}`, "lead", lead.id, payload));
+  }
+  return results;
+}
+
+async function segmentPayloads(supabase: SupabaseAdmin, segmentIds: string[]) {
+  if (!segmentIds.length) return [] as Array<{ lead: Record<string, unknown>; segmentIds: string[]; tagIds: string[] }>;
+
+  const [segmentResult, leadResult] = await Promise.all([
+    supabase.from("website_crm_segments").select("id,filters").in("id", segmentIds),
+    supabase.from("website_leads").select("id,created_at,last_contacted_at,first_name,last_name,email,phone,company,country,city,status,assigned_to,need,source,deal_value").order("updated_at", { ascending: false }).limit(500),
+  ]);
+  if (segmentResult.error || leadResult.error) return [];
+
+  const leads = (leadResult.data ?? []) as Array<Record<string, unknown>>;
+  const leadIds = leads.map((lead) => String(lead.id));
+  const tagsByLead = new Map<string, string[]>();
+  if (leadIds.length) {
+    const tagResult = await supabase.from("website_crm_lead_tags").select("lead_id,tag_id").in("lead_id", leadIds);
+    if (!tagResult.error) {
+      for (const relation of tagResult.data ?? []) {
+        const key = String(relation.lead_id);
+        tagsByLead.set(key, [...(tagsByLead.get(key) ?? []), String(relation.tag_id)]);
+      }
+    }
+  }
+
+  const segments = (segmentResult.data ?? []) as Array<{ id: string; filters: unknown }>;
+  return leads.map((lead) => {
+    const tagIds = tagsByLead.get(String(lead.id)) ?? [];
+    const matched = segments.filter((segment) => leadMatchesSegmentFilters(lead, segment.filters, tagIds)).map((segment) => segment.id);
+    return { lead, segmentIds: matched, tagIds };
+  }).filter((item) => item.segmentIds.length > 0);
 }
 
 export async function runScheduledAutomations(supabase: SupabaseAdmin, ruleId?: string) {
@@ -362,6 +447,23 @@ export async function runScheduledAutomations(supabase: SupabaseAdmin, ruleId?: 
         if (!anchor || new Date(anchor).getTime() > threshold) continue;
         const payload = { ...lead, lead_id: lead.id, lead: leadLabel(lead as Record<string, unknown>) };
         results.push(await executeRule(supabase, rule, `stale:${lead.id}:${anchor}`, "lead", lead.id, payload));
+      }
+    }
+
+    if (rule.trigger_type === "segment_match") {
+      const requestedSegments = rawList(object(rule.conditions).segment_ids);
+      if (!requestedSegments.length) continue;
+      const matches = await segmentPayloads(supabase, requestedSegments);
+      for (const match of matches) {
+        const leadId = String(match.lead.id);
+        const payload: AutomationPayload = {
+          ...match.lead,
+          lead_id: leadId,
+          lead: leadLabel(match.lead),
+          tag_ids: match.tagIds,
+          segment_ids: match.segmentIds,
+        };
+        results.push(await executeRule(supabase, rule, `segment-match:${leadId}`, "lead", leadId, payload));
       }
     }
   }
