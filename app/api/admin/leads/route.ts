@@ -59,6 +59,10 @@ export async function POST(request: Request) {
       email: data.email,
       status: data.status,
       assigned_to: data.assigned_to,
+      country: data.country,
+      need: data.need,
+      source: data.source,
+      deal_value: data.deal_value,
     });
   } catch {}
   return NextResponse.json({ lead:data }, { status:201 });
