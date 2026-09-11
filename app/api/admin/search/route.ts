@@ -32,6 +32,10 @@ export async function GET(request:Request){
     const contracts=await supabase.from("website_crm_contracts").select("id,onboarding_id,reference,title,status,version").or(`reference.ilike.${pattern},title.ilike.${pattern}`).limit(5);
     if(contracts.error&&contracts.error.code!=="42P01")partialErrors.push(contracts.error.message);
     for(const contract of contracts.data??[])results.push({id:`contract-${contract.id}`,kind:"Contrat",title:contract.reference,subtitle:`${contract.title} · V${contract.version} · ${contract.status}`,href:`/admin/onboarding?case=${contract.onboarding_id}`});
+
+    const clients=await supabase.from("website_crm_client_accounts").select("id,account_name,status,owner,commercial_owner,website_leads(email,country)").or(`account_name.ilike.${pattern},owner.ilike.${pattern},commercial_owner.ilike.${pattern}`).limit(5);
+    if(clients.error&&clients.error.code!=="42P01")partialErrors.push(clients.error.message);
+    for(const client of clients.data??[]){const lead=Array.isArray(client.website_leads)?client.website_leads[0]:client.website_leads;results.push({id:`client-${client.id}`,kind:"Client actif",title:client.account_name,subtitle:`${client.status}${lead?.country?` · ${lead.country}`:""}${client.owner?` · ${client.owner}`:""}`,href:`/admin/clients?client=${client.id}`})}
   }
 
   if(hasAdminPermission(session,"site.read")){
