@@ -35,8 +35,9 @@ export async function GET(request: Request) {
     const success = results.filter((item) => item.status === "success").length;
     const failed = results.filter((item) => item.status === "failed").length;
     const skipped = results.filter((item) => item.status === "skipped").length;
+    const followupFailed = Boolean(proposalFollowupError || (proposalFollowups?.available && proposalFollowups.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !proposalFollowupError && !(proposalFollowups?.errors.length),
+      ok: failed === 0 && !scoringError && !followupFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
