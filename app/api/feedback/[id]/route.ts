@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
+import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function json(data:unknown,status=200){const response=NextResponse.json(data,{status});response.headers.set("Cache-Control","no-store, max-age=0");response.headers.set("Referrer-Policy","no-referrer");response.headers.set("X-Robots-Tag","noindex, nofollow");return response}
@@ -36,6 +37,9 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
  const account=relation(survey.website_crm_client_accounts);const clientId=String(survey.client_id);await supabase.from("website_crm_client_accounts").update({last_nps_score:score,last_nps_at:nowIso,updated_at:nowIso}).eq("id",clientId);
  await supabase.from("website_crm_client_success_events").insert({client_id:clientId,event_type:"nps",title:`NPS reçu · ${score}/10`,detail:comment,actor:respondentName||"Client",occurred_at:nowIso});
  if(score<=6)await notifyDetractor(supabase,clientId,account?.account_name||"Client MOONY",score,comment);
- try{await syncCustomerSuccessHealth(supabase,[clientId])}catch{/* feedback must remain accepted even when the health sync is temporarily unavailable */}
+ try{
+  await syncCustomerSuccessHealth(supabase,[clientId]);
+  await runRetentionAutomations(supabase,{clientIds:[clientId]});
+ }catch{/* feedback must remain accepted even when Customer Success or retention automation is temporarily unavailable */}
  return json({ok:true,score,category:score<=6?"detractor":score<=8?"passive":"promoter"});
 }
