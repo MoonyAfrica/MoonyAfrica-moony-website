@@ -24,6 +24,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   const document=await loadProposalPortalDocument(supabase,id);if(!document)return NextResponse.json({error:"Proposition introuvable."},{status:404});
   const proposal=document.proposal;if(proposalIsExpired(proposal.valid_until))return NextResponse.json({error:"Cette proposition est expirée. Créez une nouvelle version avant de l’envoyer."},{status:409});
   if(["accepted","rejected","expired","superseded"].includes(proposal.status))return NextResponse.json({error:"Cette proposition n’est plus envoyable dans son état actuel."},{status:409});
+  if(["won","lost"].includes(document.opportunity.stage))return NextResponse.json({error:"Le deal est déjà clôturé. Réouvrez l’opportunité avant d’envoyer une nouvelle proposition."},{status:409});
   const fallbackEmail=document.primaryContact?.email||document.lead?.email||"";const email=(text(body.email)||fallbackEmail).toLowerCase();if(!/^\S+@\S+\.\S+$/.test(email))return NextResponse.json({error:"Renseignez une adresse e-mail client valide."},{status:422});
   const recipientName=text(body.name,180)||document.primaryContact?.name||`${document.lead?.first_name||""} ${document.lead?.last_name||""}`.trim()||document.lead?.company||"Client MOONY";
   if(!process.env.BREVO_API_KEY||!process.env.BREVO_SENDER_EMAIL)return NextResponse.json({error:"Brevo n’est pas configuré pour l’envoi des propositions."},{status:503});
@@ -33,7 +34,7 @@ export async function POST(request:Request,{params}:{params:Promise<{id:string}>
   if(updated.error)return NextResponse.json({error:updated.error.message},{status:500});
   const delivered=await sendProposalEmail(email,recipientName,document.lead?.company??null,proposal.reference,proposal.title,proposal.total_amount,proposal.currency,publicUrl.toString(),proposal.valid_until);
   if(!delivered){if(before.data)await supabase.from("website_crm_proposals").update(before.data).eq("id",id);return NextResponse.json({error:"L’e-mail de proposition n’a pas pu être envoyé."},{status:502})}
-  await supabase.from("website_crm_opportunities").update({stage:"proposal",probability:Math.max(.55,Number(document.opportunity.stage==="won"?1:.55)),updated_by:session.name||session.email||"MOONY Admin",updated_at:now}).eq("id",document.opportunity.id);
+  await supabase.from("website_crm_opportunities").update({stage:"proposal",probability:Math.max(.55,Number(document.opportunity.probability||0)),updated_by:session.name||session.email||"MOONY Admin",updated_at:now}).eq("id",document.opportunity.id);
   await supabase.from("website_crm_opportunity_events").insert({opportunity_id:document.opportunity.id,lead_id:document.opportunity.lead_id,event_type:"proposal_sent",title:"Proposition envoyée au client",detail:`${proposal.reference} · ${email}`,actor:session.name||session.email||"MOONY Admin"});
   await writeAuditLog(supabase,session,"crm.proposal_sent","crm_proposal",id,`Proposition ${proposal.reference} envoyée`,{opportunityId:document.opportunity.id,recipient:email});
   return NextResponse.json({ok:true,publicUrl:publicUrl.toString(),recipient:email});
