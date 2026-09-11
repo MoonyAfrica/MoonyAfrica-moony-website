@@ -32,6 +32,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Readiness","/admin/readiness",Rocket,"crm.read"],
   ["Clients actifs","/admin/clients",Building2,"crm.read"],
   ["Customer Success","/admin/customer-success",HeartPulse,"crm.read"],
+  ["Rétention auto","/admin/customer-success/retention",Zap,"crm.read"],
   ["Scoring","/admin/scoring",Flame,"crm.read"],
   ["Playbooks","/admin/playbooks",BookOpenCheck,"crm.read"],
   ["Prévisions","/admin/previsions",TrendingUp,"crm.read"],
