@@ -8,6 +8,7 @@ import { syncExecutivePortfolioAlerts } from "@/lib/crm-executive-portfolio";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
 import { syncReceivablesCollections } from "@/lib/crm-receivables";
+import { syncRevenueCommand } from "@/lib/crm-revenue-command";
 import { syncRevenueForecastAlerts } from "@/lib/crm-revenue-forecast";
 import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
@@ -92,6 +93,11 @@ export async function GET(request: Request) {
     try { contractLifecycle = await syncContractLifecycleAlerts(supabase); }
     catch (error) { contractLifecycleError = error instanceof Error ? error.message : "Cycle contractuel indisponible."; }
 
+    let revenueCommand: Awaited<ReturnType<typeof syncRevenueCommand>> | null = null;
+    let revenueCommandError: string | null = null;
+    try { revenueCommand = await syncRevenueCommand(supabase); }
+    catch (error) { revenueCommandError = error instanceof Error ? error.message : "Revenue Command indisponible."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -112,8 +118,9 @@ export async function GET(request: Request) {
     const billingFailed = Boolean(billingError || (billing?.available && billing.errors.length));
     const collectionsFailed = Boolean(collectionsError || (collections?.available && collections.errors.length));
     const contractLifecycleFailed = Boolean(contractLifecycleError || (contractLifecycle?.available && contractLifecycle.errors.length));
+    const revenueCommandFailed = Boolean(revenueCommandError || (revenueCommand?.available && revenueCommand.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed && !collectionsFailed && !contractLifecycleFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed && !collectionsFailed && !contractLifecycleFailed && !revenueCommandFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -141,6 +148,8 @@ export async function GET(request: Request) {
       collectionsError,
       contractLifecycle,
       contractLifecycleError,
+      revenueCommand,
+      revenueCommandError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
