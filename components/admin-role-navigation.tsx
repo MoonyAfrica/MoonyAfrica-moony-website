@@ -39,6 +39,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Billing & MRR","/admin/customer-success/billing",ReceiptText,"crm.read"],
   ["Encaissements","/admin/customer-success/collections",Banknote,"crm.read"],
   ["Revenue Command","/admin/customer-success/revenue-command",BarChart3,"crm.read"],
+  ["Voice of Customer","/admin/customer-success/voice",MessageCircleMore,"crm.read"],
   ["Plans de succès","/admin/customer-success/plans",Target,"crm.read"],
   ["Gouvernance compte","/admin/customer-success/governance",Network,"crm.read"],
   ["Rétention auto","/admin/customer-success/retention",Zap,"crm.read"],
