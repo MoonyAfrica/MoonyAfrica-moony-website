@@ -14,6 +14,7 @@ import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
 import { syncCrmScoreTags } from "@/lib/crm-score-sync";
 import { syncSuccessPlanReviews } from "@/lib/crm-success-plans";
+import { syncVoiceFeedbackAlerts } from "@/lib/crm-voice-feedback";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 function authorized(request: Request) {
@@ -98,6 +99,11 @@ export async function GET(request: Request) {
     try { revenueCommand = await syncRevenueCommand(supabase); }
     catch (error) { revenueCommandError = error instanceof Error ? error.message : "Revenue Command indisponible."; }
 
+    let voiceFeedback: Awaited<ReturnType<typeof syncVoiceFeedbackAlerts>> | null = null;
+    let voiceFeedbackError: string | null = null;
+    try { voiceFeedback = await syncVoiceFeedbackAlerts(supabase); }
+    catch (error) { voiceFeedbackError = error instanceof Error ? error.message : "Voice of Customer indisponible."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -119,8 +125,9 @@ export async function GET(request: Request) {
     const collectionsFailed = Boolean(collectionsError || (collections?.available && collections.errors.length));
     const contractLifecycleFailed = Boolean(contractLifecycleError || (contractLifecycle?.available && contractLifecycle.errors.length));
     const revenueCommandFailed = Boolean(revenueCommandError || (revenueCommand?.available && revenueCommand.errors.length));
+    const voiceFeedbackFailed = Boolean(voiceFeedbackError || (voiceFeedback?.available && voiceFeedback.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed && !collectionsFailed && !contractLifecycleFailed && !revenueCommandFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed && !collectionsFailed && !contractLifecycleFailed && !revenueCommandFailed && !voiceFeedbackFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -150,6 +157,8 @@ export async function GET(request: Request) {
       contractLifecycleError,
       revenueCommand,
       revenueCommandError,
+      voiceFeedback,
+      voiceFeedbackError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
