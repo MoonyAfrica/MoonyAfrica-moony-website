@@ -36,24 +36,24 @@ export async function syncBillingOperations(supabase:any):Promise<BillingResult>
  if(settingsResult.error){if(missing(settingsResult.error))return {...output,available:false};throw new Error(settingsResult.error.message)}
  const settings=settingsResult.data??{enabled:false,upcoming_days:7,overdue_grace_days:0};output.enabled=Boolean(settings.enabled);if(!output.enabled)return output;
  const [invoiceResult,subscriptionResult]=await Promise.all([
-  supabase.from("website_crm_billing_invoices").select("id,client_id,reference,title,status,due_date,total_amount,currency,website_crm_client_accounts(account_name)").in("status",["issued","overdue"]).order("due_date",{ascending:true}),
+  supabase.from("website_crm_billing_invoices").select("id,client_id,reference,title,status,due_date,total_amount,amount_paid,currency,website_crm_client_accounts(account_name)").in("status",["issued","overdue"]).order("due_date",{ascending:true}),
   supabase.from("website_crm_account_subscriptions").select("id,client_id,name,status,next_invoice_date,recurring_amount,currency,website_crm_client_accounts(account_name)").eq("status","active").order("next_invoice_date",{ascending:true}),
  ]);
  if(invoiceResult.error){if(missing(invoiceResult.error))return {...output,available:false};output.errors.push(invoiceResult.error.message)}
  if(subscriptionResult.error){if(!missing(subscriptionResult.error))output.errors.push(subscriptionResult.error.message)}
  const now=today(),upcoming=plusDays(Number(settings.upcoming_days||7)),grace=Math.max(0,Number(settings.overdue_grace_days||0));
  for(const invoice of invoiceResult.data??[]){
-  output.processed+=1;const account=Array.isArray(invoice.website_crm_client_accounts)?invoice.website_crm_client_accounts[0]:invoice.website_crm_client_accounts;const label=account?.account_name||"Compte client";const graceDate=dueWithGrace(invoice.due_date,grace);
+  output.processed+=1;const account=Array.isArray(invoice.website_crm_client_accounts)?invoice.website_crm_client_accounts[0]:invoice.website_crm_client_accounts;const label=account?.account_name||"Compte client";const graceDate=dueWithGrace(invoice.due_date,grace);const balance=Math.max(0,Number(invoice.total_amount||0)-Number(invoice.amount_paid||0));if(balance<=0)continue;
   if(invoice.status==="issued"&&graceDate&&graceDate<now){
    const updated=await supabase.from("website_crm_billing_invoices").update({status:"overdue",updated_by:"MOONY Billing",updated_at:new Date().toISOString()}).eq("id",invoice.id).eq("status","issued");
    if(updated.error){output.errors.push(updated.error.message);continue}output.markedOverdue+=1;
   }
   if(graceDate&&graceDate<now){
    const key=`invoice-overdue:${invoice.id}:${invoice.due_date}`;const run=await beginRun(supabase,"invoice_overdue",invoice.id,key,`Facture ${invoice.reference} arrivée à échéance.`);
-   if(run){output.runs+=1;output.alerts+=await notify(supabase,invoice.id,key,"Facture en retard",`${label} · ${invoice.reference} · ${Number(invoice.total_amount||0).toLocaleString("fr-FR")} ${invoice.currency}. Aucune relance client n’a été envoyée automatiquement.`,"urgent")}
+   if(run){output.runs+=1;output.alerts+=await notify(supabase,invoice.id,key,"Facture en retard",`${label} · ${invoice.reference} · reste dû ${balance.toLocaleString("fr-FR")} ${invoice.currency}. Aucune relance client n’a été envoyée automatiquement.`,"urgent")}
   }else if(invoice.status==="issued"&&invoice.due_date&&invoice.due_date>=now&&invoice.due_date<=upcoming){
    const key=`invoice-due:${invoice.id}:${invoice.due_date}`;const run=await beginRun(supabase,"invoice_due",invoice.id,key,`Facture ${invoice.reference} bientôt à échéance.`);
-   if(run){output.runs+=1;output.alerts+=await notify(supabase,invoice.id,key,"Échéance de facture à surveiller",`${label} · ${invoice.reference} · échéance ${invoice.due_date}.`,`warning`)}
+   if(run){output.runs+=1;output.alerts+=await notify(supabase,invoice.id,key,"Échéance de facture à surveiller",`${label} · ${invoice.reference} · reste dû ${balance.toLocaleString("fr-FR")} ${invoice.currency} · échéance ${invoice.due_date}.`,`warning`)}
   }
  }
  for(const subscription of subscriptionResult.data??[]){
