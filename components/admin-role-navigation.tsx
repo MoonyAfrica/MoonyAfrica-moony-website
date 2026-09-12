@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  Activity, Banknote, BarChart3, BookOpen, BookOpenCheck, Briefcase, Building2, CalendarDays, ClipboardCheck, ClipboardList, FileText, Flame, FolderOpen, Gauge, Handshake, HeartPulse, History,
+  Activity, Banknote, BarChart3, BookOpen, BookOpenCheck, Briefcase, Building2, CalendarDays, ClipboardCheck, ClipboardList, FileText, Flame, FolderOpen, Gauge, GitBranch, Handshake, HeartPulse, History,
   Image as ImageIcon, LayoutDashboard, Mail, Megaphone, Menu, MessageCircleMore, Network, Palette, ReceiptText, Rocket, Settings,
   ShieldCheck, Sparkles, Target, TrendingUp, UserCog, Users, Zap,
 } from "lucide-react";
@@ -41,6 +41,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Revenue Command","/admin/customer-success/revenue-command",BarChart3,"crm.read"],
   ["Executive Reports","/admin/customer-success/executive-reports",ClipboardList,"crm.read"],
   ["Voice of Customer","/admin/customer-success/voice",MessageCircleMore,"crm.read"],
+  ["Product Roadmap","/admin/product-roadmap",GitBranch,"crm.read"],
   ["Plans de succès","/admin/customer-success/plans",Target,"crm.read"],
   ["Gouvernance compte","/admin/customer-success/governance",Network,"crm.read"],
   ["Rétention auto","/admin/customer-success/retention",Zap,"crm.read"],
