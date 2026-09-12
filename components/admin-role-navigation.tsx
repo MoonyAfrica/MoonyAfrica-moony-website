@@ -35,6 +35,7 @@ const groups:readonly {label:string;items:readonly Item[]}[]=[
   ["Portefeuille CS","/admin/customer-success/portfolio",BarChart3,"crm.read"],
   ["Escalades CS","/admin/customer-success/escalations",Flame,"crm.read"],
   ["Renewal Desk","/admin/customer-success/revenue",TrendingUp,"crm.read"],
+  ["Contrats & avenants","/admin/customer-success/contracts",FileText,"crm.read"],
   ["Billing & MRR","/admin/customer-success/billing",ReceiptText,"crm.read"],
   ["Encaissements","/admin/customer-success/collections",Banknote,"crm.read"],
   ["Plans de succès","/admin/customer-success/plans",Target,"crm.read"],
