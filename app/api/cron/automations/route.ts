@@ -6,6 +6,7 @@ import { syncCustomerSuccessEscalations } from "@/lib/crm-escalations";
 import { syncExecutivePortfolioAlerts } from "@/lib/crm-executive-portfolio";
 import { syncWonOpportunitiesToOnboarding } from "@/lib/crm-onboarding";
 import { syncCustomerSuccessHealth } from "@/lib/crm-customer-success";
+import { syncReceivablesCollections } from "@/lib/crm-receivables";
 import { syncRevenueForecastAlerts } from "@/lib/crm-revenue-forecast";
 import { runRetentionAutomations } from "@/lib/crm-retention-automations";
 import { runProposalFollowups } from "@/lib/crm-proposal-followups";
@@ -80,6 +81,11 @@ export async function GET(request: Request) {
     try { billing = await syncBillingOperations(supabase); }
     catch (error) { billingError = error instanceof Error ? error.message : "Billing & Revenue Operations indisponible."; }
 
+    let collections: Awaited<ReturnType<typeof syncReceivablesCollections>> | null = null;
+    let collectionsError: string | null = null;
+    try { collections = await syncReceivablesCollections(supabase); }
+    catch (error) { collectionsError = error instanceof Error ? error.message : "Receivables & Collections indisponible."; }
+
     const [scheduled, delayed] = await Promise.all([
       runScheduledAutomations(supabase),
       runDueAutomationJobs(supabase),
@@ -98,8 +104,9 @@ export async function GET(request: Request) {
     const escalationsFailed = Boolean(escalationsError || (escalations?.available && escalations.errors.length));
     const revenueForecastFailed = Boolean(revenueForecastError || (revenueForecast?.available && revenueForecast.errors.length));
     const billingFailed = Boolean(billingError || (billing?.available && billing.errors.length));
+    const collectionsFailed = Boolean(collectionsError || (collections?.available && collections.errors.length));
     return NextResponse.json({
-      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed,
+      ok: failed === 0 && !scoringError && !followupFailed && !onboardingFailed && !customerSuccessFailed && !retentionFailed && !successPlansFailed && !accountGovernanceFailed && !executivePortfolioFailed && !escalationsFailed && !revenueForecastFailed && !billingFailed && !collectionsFailed,
       summary: { success, failed, skipped, total: results.length, scheduled: scheduled.length, delayed: delayed.length },
       scoring,
       scoringError,
@@ -123,6 +130,8 @@ export async function GET(request: Request) {
       revenueForecastError,
       billing,
       billingError,
+      collections,
+      collectionsError,
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Erreur d’automatisation." }, { status: 500 });
